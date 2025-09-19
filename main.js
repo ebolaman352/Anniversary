@@ -13,14 +13,14 @@ success screen, and keepsake generators.
   const CONFIG = {
     titleName: 'Dear, Ema',
     // LONG romantic intro (long-distance friendly)
-    introText: `Dear Ema,\n\nEvery night I fall asleep smiling because somewhere on the other side of the world your laugh is still echoing in my head. You make tiny things feel enormous — a sleepy text, the way you describe a silly little thought, the stories you tell me at 2 AM that turn ordinary minutes into the best part of my day. Loving you is a quiet, constant adventure: I love hearing your voice, trading ridiculous memes, building plans that start as jokes and slowly turn into promises. I want to be the one who learns your favorite songs and sings them badly just so you laugh; the one who cheers when you try something new; the one who holds your hand through cold Wi‑Fi and low battery and every sunrise in between. I promise to choose you even on the ordinary days, to celebrate your tiny wins, to give you a soft place after a rough day, and to keep finding ways to surprise you — with dumb jokes, midnight playlists, and promises written in pixels. You are my favorite conversation, my safest chaos, my warm light when everything else turns grey. Stay with me in this long, silly, beautiful story — I’ll keep turning the pages if you’ll keep reading them with me.\n\n— Ned`,
+    introText: `Dear Ema,\n\nEvery night I fall asleep smiling because somewhere on the other side of the world your laugh is still echoing in my head. You make tiny things feel enormous — a sleepy text, the way you describe a silly little thought, the stories you tell me at 2 AM that turn ordinary minutes into the best part of my day. Loving you is a quiet, constant adventure: I love hearing your voice, trading ridiculous memes, building plans that start as jokes and slowly turn into promises. I want to be the one who learns your favorite songs and sings them badly just so you laugh; the one who cheers when you try something new; the one who holds your hand through cold Wi-Fi and low battery and every sunrise in between. I promise to choose you even on the ordinary days, to celebrate your tiny wins, to give you a soft place after a rough day, and to keep finding ways to surprise you — with dumb jokes, midnight playlists, and promises written in pixels. You are my favorite conversation, my safest chaos, my warm light when everything else turns grey. Stay with me in this long, silly, beautiful story — I’ll keep turning the pages if you’ll keep reading them with me.\n\n— Ned`,
 
     // playful sing-along stanza (array for karaoke)
     singLines: [
       'Oh E-ma, my heart hops like a kite,',
       'When you text me “hey” in the middle of the night.',
       'I’ll be your playlist, your late-call tune,',
-      'Your Wi‑Fi warrior — and your afternoon moon.'
+      'Your Wi-Fi warrior — and your afternoon moon.'
     ],
 
     proposalTitle: 'Will you marry me 🥹',
@@ -256,7 +256,7 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
     const qTitle = elt('div',{class:'footerTiny'}, 'Did my pretty baby finish reading?'); bottom.appendChild(qTitle);
     const continueWrap = elt('div',{class:'continueWrap'});
     const continueBtn = elt('button',{class:'btn',id:'continueBtn'}, 'Continue'); continueWrap.appendChild(continueBtn); bottom.appendChild(continueWrap);
-    const gamesRow = elt('div',{style:{marginTop:'12px',display:'flex',gap:'8px',flexWrap:'wrap',justifyContent:'center'}});
+    const gamesRow = elt('div',{style:{marginTop:'12px',display:'flex',gap:'8px',flexWrap:'wrap',justify-content:'center'}});
     const game1 = elt('button',{class:'btn secondary'}, 'Catch Hearts');
     const game2 = elt('button',{class:'btn secondary'}, 'Pillow Fight');
     const game3 = elt('button',{class:'btn secondary'}, 'Memory Match');
@@ -424,7 +424,7 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
     const stage = elt('div',{style:{position:'relative',flex:1,overflow:'hidden',borderRadius:'10px',background:'linear-gradient(180deg,#fff,#f7fffb)'}});
     board.appendChild(stage);
 
-    const footer = elt('div',{style:{display:'flex',gap:'8px',justifyContent:'flex-end',marginTop:'10px'}});
+    const footer = elt('div',{style:{display:'flex',gap:'8px',justify-content:'flex-end',marginTop:'10px'}});
     const closeBtn = elt('button',{class:'btn secondary'}, 'Close'); footer.appendChild(closeBtn); board.appendChild(footer);
 
     app.appendChild(overlay);
