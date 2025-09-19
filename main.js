@@ -1,27 +1,10 @@
-/*
-UPDATED: main.js (with index.html snippet)
-
-
-ASSETS (place these exact paths in the repo if you have them):
-- /images/backgrounds1.png, backgrounds2.png, ... (optional)
-- /images/confetti.png (optional)
-- /images/heart.png (optional)
-- /audios/music.mp3 (optional)
-- /audios/interactions.mp3 (optional)
-- /audios/voicemessage.mp3 (optional)
-
-IMPORTANT: This version automatically creates beautiful fallback backgrounds and graceful fallbacks for missing sprites or audio so the site still fully works even if you haven't uploaded assets yet.
-
-This upgraded main.js includes:
-- Procedural gradient background generator when images are missing
-- Graceful fallbacks for confetti/heart sprites (drawn shapes if images missing)
-- Safe audio handling: missing audio won't break the site; play controls are hidden or disabled.
-- More robust preloader and clearer console warnings to help debugging on deployment
-
-
-/* =========================
-   main.js - robust single-file site with asset fallbacks
-   ========================= */
+/* 
+FINAL UPDATED: main.js (single-file site)
+Place this file at the repo root. Also add the minimal index.html shown below.
+This file contains the full interactive site (fallback-safe) with romantic intro,
+karaoke stanza, days counter, choose-your-adventure, mini-games, proposal flow,
+success screen, and keepsake generators.
+*/
 
 (function(){
   'use strict';
@@ -29,10 +12,20 @@ This upgraded main.js includes:
   /* ---------- CONFIG / CONTENT ---------- */
   const CONFIG = {
     titleName: 'Dear, Ema',
-    introText: `Dear Ema,\n\nEvery moment with you paints my world in brighter colors. I love the way you laugh, the little ways you notice tiny beautiful things, and the way your hand fits perfectly in mine. I want to be with you forever — to support you, to cherish you, and to make our ordinary days feel extraordinary.\n\nAlways,\nNed`,
+    // LONG romantic intro (long-distance friendly)
+    introText: `Dear Ema,\n\nEvery night I fall asleep smiling because somewhere on the other side of the world your laugh is still echoing in my head. You make tiny things feel enormous — a sleepy text, the way you describe a silly little thought, the stories you tell me at 2 AM that turn ordinary minutes into the best part of my day. Loving you is a quiet, constant adventure: I love hearing your voice, trading ridiculous memes, building plans that start as jokes and slowly turn into promises. I want to be the one who learns your favorite songs and sings them badly just so you laugh; the one who cheers when you try something new; the one who holds your hand through cold Wi‑Fi and low battery and every sunrise in between. I promise to choose you even on the ordinary days, to celebrate your tiny wins, to give you a soft place after a rough day, and to keep finding ways to surprise you — with dumb jokes, midnight playlists, and promises written in pixels. You are my favorite conversation, my safest chaos, my warm light when everything else turns grey. Stay with me in this long, silly, beautiful story — I’ll keep turning the pages if you’ll keep reading them with me.\n\n— Ned`,
+
+    // playful sing-along stanza (array for karaoke)
+    singLines: [
+      'Oh E-ma, my heart hops like a kite,',
+      'When you text me “hey” in the middle of the night.',
+      'I’ll be your playlist, your late-call tune,',
+      'Your Wi‑Fi warrior — and your afternoon moon.'
+    ],
+
     proposalTitle: 'Will you marry me 🥹',
-    proposalSubtitle: `Do you accept Ned to be your loving husband forever — even through low battery, spotty Wi‑Fi, and every sunrise in between?`,
-    successText: `You said YES! My heart is the luckiest. I promise to make you laugh, to be your teammate, and to choose you every single day. Thank you for being you. I love you more than words can say. — Ned`,
+    proposalSubtitle: `Do you accept Ned — as your partner in every midnight chat, your teammate when plans go sideways, your cheerleader when you try something brave, and your stubborn, silly, loving husband through slow days, fast days, low batteries and spotty connections?`,
+    successText: `I can't believe you said yes — my luck and my joy and my every future just got a thousand times brighter. I promise to keep being ridiculous with you, to learn how to be better, to listen when you need space and to celebrate when you're shining. We'll build a life made from the little things: playlists we both hate-and-love, secret nicknames, small traditions that only we understand, and a million tiny moments that add up to forever. I choose you now and I'll choose you tomorrow, every time. Thank you for trusting my heart. I love you more than any message can hold.\n\n— Ned`,
 
     // visuals
     greenHex: '#b8f1d6',
@@ -52,10 +45,13 @@ This upgraded main.js includes:
     },
 
     // timings & tuning
-    typingSpeed: 26, // ms per char
+    typingSpeed: 24, // ms per char (slightly faster)
     slideshowInterval: 6000, // ms
     preloaderTimeout: 7000, // ms max wait for assets
     gameHeartsCount: 7,
+
+    // START DATE for days together counter (edit to actual start date)
+    START_DATE: '2025-07-19'
   };
 
   /* ---------- UTILITIES ---------- */
@@ -74,6 +70,7 @@ This upgraded main.js includes:
   function rand(min, max){ return Math.random() * (max - min) + min; }
   function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
   function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+  function daysTogetherText(startDate){ const start = new Date(startDate + 'T00:00:00'); const now = new Date(); const diff = now - start; const days = Math.floor(diff / (1000*60*60*24)); const hours = Math.floor(diff / (1000*60*60)); return `${days} days (${hours} hours) of silly, cozy, loud, quiet time together`; }
 
   /* ---------- STYLES ---------- */
   function injectStyles(){
@@ -91,7 +88,7 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
 .bgimg.visible{opacity:1}
 .bg-filter{position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,0.15),rgba(255,255,255,0.35));pointer-events:none}
 .overlay{position:relative;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px;width:100%;height:100%}
-.card{max-width:920px;width:max(92%,760px);background:rgba(255,255,255,0.9);backdrop-filter:blur(8px);border-radius:16px;padding:26px 30px;box-shadow:0 6px 40px rgba(4,23,31,0.08);transition:transform 0.5s ease}
+.card{max-width:920px;width:max(92%,760px);background:rgba(255,255,255,0.92);backdrop-filter:blur(8px);border-radius:16px;padding:26px 30px;box-shadow:0 6px 40px rgba(4,23,31,0.08);transition:transform 0.5s ease}
 .title{font-size:30px;margin:0 0 12px 0;font-weight:800}
 .para{white-space:pre-wrap;line-height:1.55;font-size:18px;margin-bottom:14px;color:#09323a}
 .controls{display:flex;gap:12px;align-items:center}
@@ -111,9 +108,11 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
 .hidden{display:none}
 .visualizer{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);width:60%;height:48px;z-index:8}
 .gameOverlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.36);z-index:60}
-.gameBoard{width:min(720px,96vw);height:min(520px,86vh);background:linear-gradient(180deg,rgba(255,255,255,0.95),rgba(255,255,255,0.9));border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.gameBoard{width:min(820px,96vw);height:min(620px,86vh);background:linear-gradient(180deg,rgba(255,255,255,0.95),rgba(255,255,255,0.9));border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:12px}
 .heartSprite{position:absolute;width:44px;height:44px;pointer-events:auto}
 .controlsRow{display:flex;gap:8px;align-items:center}
+.karaokeLine{padding:6px;border-radius:8px}
+.karaokeLine.highlight{background:linear-gradient(90deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06));}
 @media(max-width:520px){.card{padding:16px;border-radius:12px}.title{font-size:20px}.bigTitle{font-size:24px}.para{font-size:15px}.visualizer{width:86%}}
 `;
     const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
@@ -151,7 +150,6 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
     const c = document.createElement('canvas'); c.width = w; c.height = h; const ctx = c.getContext('2d');
     const g = ctx.createLinearGradient(0,0,w,h); const step = 1/(colors.length-1);
     colors.forEach((col,i)=> g.addColorStop(i*step, col)); ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
-    // subtle overlay pattern
     ctx.globalAlpha = 0.06; ctx.fillStyle = '#ffffff'; for(let i=0;i<200;i++){ ctx.beginPath(); ctx.arc(Math.random()*w, Math.random()*h, Math.random()*2.5, 0, Math.PI*2); ctx.fill(); }
     return c.toDataURL('image/png');
   }
@@ -182,13 +180,8 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
 
     function spawn(x,y,n=30){ for(let i=0;i<n;i++){ particles.push({ x,y, vx:rand(-6,6), vy:rand(-14,-3), size:rand(14,44), life:rand(80,220), age:0, rot:rand(0,6.28), vrot:rand(-0.12,0.12), sprite: Math.random()>0.5 ? 'heart' : 'confetti' }); } }
 
-    let raf; function frame(){ ctx.clearRect(0,0,W,H); for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.age++; if(p.age>p.life){ particles.splice(i,1); continue; } p.vy += 0.4; p.x += p.vx; p.y += p.vy; p.rot += p.vrot; ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); const img=sprites[p.sprite]; if(img) ctx.drawImage(img, -p.size/2, -p.size/2, p.size, p.size); else { // fallback drawing
-            if(p.sprite === 'heart'){ drawHeart(ctx, 0, 0, p.size/2); } else { // confetti square
-              ctx.fillStyle = `rgba(${Math.floor(rand(60,240))},${Math.floor(rand(60,240))},${Math.floor(rand(60,240))},${0.9 - p.age/p.life})`; ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
-            }
-          } ctx.restore(); } raf=requestAnimationFrame(frame); }
-    frame();
-    return { spawn, destroy(){ cancelAnimationFrame(raf); c.remove(); } };
+    let raf; function frame(){ ctx.clearRect(0,0,W,H); for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.age++; if(p.age>p.life){ particles.splice(i,1); continue; } p.vy += 0.4; p.x += p.vx; p.y += p.vy; p.rot += p.vrot; ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); const img=sprites[p.sprite]; if(img) ctx.drawImage(img, -p.size/2, -p.size/2, p.size, p.size); else { if(p.sprite === 'heart'){ drawHeart(ctx, 0, 0, p.size/2); } else { ctx.fillStyle = `rgba(${Math.floor(rand(60,240))},${Math.floor(rand(60,240))},${Math.floor(rand(60,240))},${0.9 - p.age/p.life})`; ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size); } } ctx.restore(); } raf=requestAnimationFrame(frame); }
+    frame(); return { spawn, destroy(){ cancelAnimationFrame(raf); c.remove(); } };
   }
   function drawHeart(ctx, x, y, size){ ctx.save(); ctx.translate(x,y); ctx.beginPath(); const topCurveHeight = size * 0.3; ctx.moveTo(0, topCurveHeight); ctx.bezierCurveTo(0, topCurveHeight - (size * 0.5), -size, topCurveHeight - (size * 0.5), -size, topCurveHeight); ctx.bezierCurveTo(-size, topCurveHeight + (size * 0.5), 0, topCurveHeight + (size * 0.9), 0, size); ctx.bezierCurveTo(0, topCurveHeight + (size * 0.9), size, topCurveHeight + (size * 0.5), size, topCurveHeight); ctx.bezierCurveTo(size, topCurveHeight - (size * 0.5), 0, topCurveHeight - (size * 0.5), 0, topCurveHeight); ctx.closePath(); ctx.fillStyle = 'rgba(255,80,120,0.95)'; ctx.fill(); ctx.restore(); }
 
@@ -206,7 +199,7 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
     }catch(e){ console.warn('Visualizer init failed', e); return null; }
   }
 
-  /* ---------- BUILD MAIN UI (robust) ---------- */
+  /* ---------- BUILD MAIN UI (robust & adventurous) ---------- */
   function buildUI(backgrounds, preloaderEl){
     // root app
     const existingApp = document.getElementById('app'); if(existingApp) existingApp.remove();
@@ -227,17 +220,28 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
     const title = elt('h1',{class:'title'}, CONFIG.titleName);
     card.appendChild(title);
 
+    // days counter under title
+    const daysCounter = elt('div',{class:'footerTiny',id:'daysCounter'}, daysTogetherText(CONFIG.START_DATE));
+    card.appendChild(daysCounter);
+    setInterval(()=>{ daysCounter.textContent = daysTogetherText(CONFIG.START_DATE); }, 60*1000);
+
     // intro paragraph area
     const para = elt('div',{class:'para',id:'introPara'});
     card.appendChild(para);
 
-    // typed highlight
+    // typed highlight and controls (music + skip + adventure)
     const controlsRow = elt('div',{class:'controlsRow'});
-    const skipBtn = elt('button',{class:'btn secondary','aria-label':'Skip intro'}, 'Skip');
     const musicBtn = elt('button',{class:'btn','aria-label':'Play music'}, 'Play music');
-    const motionToggle = elt('button',{class:'btn small','aria-pressed':'false','title':'Reduce motion'}, 'Reduce motion: OFF');
-    controlsRow.appendChild(musicBtn); controlsRow.appendChild(skipBtn); controlsRow.appendChild(motionToggle);
+    const skipBtn = elt('button',{class:'btn secondary','aria-label':'Skip intro'}, 'Skip');
+    const adventureBtn = elt('button',{class:'btn secondary','aria-label':'Choose an adventure'}, 'Choose our adventure');
+    controlsRow.appendChild(musicBtn); controlsRow.appendChild(skipBtn); controlsRow.appendChild(adventureBtn);
     card.appendChild(controlsRow);
+
+    // karaoke / sing lines area (hidden until revealed)
+    const karaokeWrap = elt('div',{style:{marginTop:'12px',width:'100%'}});
+    const karaokeList = elt('div',{});
+    karaokeWrap.appendChild(karaokeList);
+    card.appendChild(karaokeWrap);
 
     // audio controls & visualizer container
     const audioControls = elt('div',{class:'audioControls'});
@@ -247,33 +251,29 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
 
     const visualizerContainer = elt('div',{}); card.appendChild(visualizerContainer);
 
-    // bottom continue area
+    // bottom continue area (includes link to minigames)
     const bottom = elt('div',{class:'bottomArea'});
     const qTitle = elt('div',{class:'footerTiny'}, 'Did my pretty baby finish reading?'); bottom.appendChild(qTitle);
     const continueWrap = elt('div',{class:'continueWrap'});
     const continueBtn = elt('button',{class:'btn',id:'continueBtn'}, 'Continue'); continueWrap.appendChild(continueBtn); bottom.appendChild(continueWrap);
-    const extraTiny = elt('div',{class:'footerTiny'}, 'Mobile-friendly: tap to control audio and swipe backgrounds.'); bottom.appendChild(extraTiny);
+    const gamesRow = elt('div',{style:{marginTop:'12px',display:'flex',gap:'8px',flexWrap:'wrap',justifyContent:'center'}});
+    const game1 = elt('button',{class:'btn secondary'}, 'Catch Hearts');
+    const game2 = elt('button',{class:'btn secondary'}, 'Pillow Fight');
+    const game3 = elt('button',{class:'btn secondary'}, 'Memory Match');
+    gamesRow.appendChild(game1); gamesRow.appendChild(game2); gamesRow.appendChild(game3); bottom.appendChild(gamesRow);
     card.appendChild(bottom);
 
     // audio elements - create but don't assume they will play
-    let music=null, interactions=null, voice=null;
-    try{ music = new Audio(CONFIG.audios.music); music.loop=true; music.preload='none'; }catch(e){ console.warn('Music audio creation failed', e); music=null; }
+    let music=null, interactions=null, voice=null; try{ music = new Audio(CONFIG.audios.music); music.loop=true; music.preload='none'; }catch(e){ music=null; }
     try{ interactions = new Audio(CONFIG.audios.interactions); interactions.preload='none'; }catch(e){ interactions=null; }
     try{ voice = new Audio(CONFIG.audios.voice); voice.preload='none'; }catch(e){ voice=null; }
-
-    // hide audio controls if audio not available
-    if(!voice){ audioVoiceBtn.style.display='none'; }
-    if(!music){ musicBtn.disabled = true; musicBtn.textContent = 'Music unavailable'; }
+    if(!voice) audioVoiceBtn.style.display='none'; if(!music) { musicBtn.disabled=true; musicBtn.textContent='Music unavailable'; }
 
     // visualizer (try to connect when user plays music)
     let visualizerHandle = null; async function tryInitVisualizer(){ if(visualizerHandle || !music) return; visualizerHandle = await setupVisualizer(music, visualizerContainer); }
 
     // music controls
-    let musicPlaying=false;
-    musicBtn.addEventListener('click', async ()=>{
-      if(!music) return;
-      try{ if(!musicPlaying){ await music.play(); musicPlaying=true; musicBtn.textContent='Pause music'; tryInitVisualizer(); } else { music.pause(); musicPlaying=false; musicBtn.textContent='Play music'; } }catch(e){ console.warn('Music play failed', e); }
-    });
+    let musicPlaying=false; musicBtn.addEventListener('click', async ()=>{ if(!music) return; try{ if(!musicPlaying){ await music.play(); musicPlaying=true; musicBtn.textContent='Pause music'; tryInitVisualizer(); } else { music.pause(); musicPlaying=false; musicBtn.textContent='Play music'; } }catch(e){ console.warn('music play blocked', e); } });
 
     // voice control
     let voicePlaying=false; if(voice){ audioVoiceBtn.addEventListener('click', ()=>{ if(!voicePlaying){ voice.play().catch(()=>{}); audioVoiceBtn.textContent='⏸'; voicePlaying=true; } else { voice.pause(); audioVoiceBtn.textContent='▶'; voicePlaying=false; } }); voice.addEventListener('ended', ()=>{ audioVoiceBtn.textContent='▶'; voicePlaying=false; }); }
@@ -282,65 +282,96 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
     const typer = typeWithHighlight(para, CONFIG.introText, CONFIG.typingSpeed);
     skipBtn.addEventListener('click', ()=>{ typer.skip(); });
 
-    // background slideshow & swipe
-    let currentBg=0; function showBg(i){ bgEls.forEach((el,idx)=> el.classList.toggle('visible', idx===i)); }
-    showBg(0);
-    let bgTimer = setInterval(()=>{ currentBg=(currentBg+1)%bgEls.length; showBg(currentBg); }, CONFIG.slideshowInterval);
+    // karaoke setup (lines displayed but hidden until user plays)
+    CONFIG.singLines.forEach((line, idx)=>{
+      const l = elt('div',{class:'karaokeLine',dataset:{idx:idx}} , line);
+      karaokeList.appendChild(l);
+    });
+    let karaokeIndex = 0; function highlightKaraoke(i){ const children = Array.from(karaokeList.children); children.forEach((c,idx)=> c.classList.toggle('highlight', idx===i)); }
 
-    // swipe support for touch
-    let touchStartX=null; overlay.addEventListener('touchstart', e=>{ touchStartX = e.touches[0].clientX; });
-    overlay.addEventListener('touchend', e=>{ if(touchStartX===null) return; const dx = (e.changedTouches[0].clientX - touchStartX); if(Math.abs(dx) > 60){ clearInterval(bgTimer); if(dx<0) currentBg=(currentBg+1)%bgEls.length; else currentBg=(currentBg-1+bgEls.length)%bgEls.length; showBg(currentBg); bgTimer = setInterval(()=>{ currentBg=(currentBg+1)%bgEls.length; showBg(currentBg); }, CONFIG.slideshowInterval); } touchStartX=null; });
+    // when music plays, optionally play karaoke stanza as interaction audio (we'll simply highlight timed lines)
+    async function singAloud(){ highlightKaraoke(0); karaokeIndex=0; for(let i=0;i<CONFIG.singLines.length;i++){ highlightKaraoke(i); // simple delay for dramatic effect
+        await sleep(1200); } highlightKaraoke(-1); }
+    // user can tap adventureBtn to show adventure modal
+    adventureBtn.addEventListener('click', ()=>{ showAdventureModal(app); });
 
-    // parallax pointer move
-    let reduceMotion=false; motionToggle.addEventListener('click', ()=>{ reduceMotion=!reduceMotion; motionToggle.textContent = `Reduce motion: ${reduceMotion? 'ON' : 'OFF'}`; motionToggle.setAttribute('aria-pressed', String(reduceMotion)); });
-    window.addEventListener('pointermove', e=>{ if(reduceMotion) return; const sx=(e.clientX/window.innerWidth-0.5)*6; const sy=(e.clientY/window.innerHeight-0.5)*6; bgEls.forEach((el,idx)=>{ el.style.transform = `translate(${sx*(idx+1)/10}px, ${sy*(idx+1)/10}px) scale(1.02)`; }); });
-
-    // continue -> proposal
+    // Continue -> proposal
     continueBtn.addEventListener('click', ()=>{ if(interactions) interactions.play().catch(()=>{}); showProposalScreen(app, {music, interactions, voice}); });
+
+    // minigames
+    game1.addEventListener('click', ()=> showCatchHeartsGame(app));
+    game2.addEventListener('click', ()=> showPillowFight(app));
+    game3.addEventListener('click', ()=> showMemoryMatch(app));
 
     // progress removal of preloader
     if(preloaderEl) { preloaderEl.classList.add('hidden'); setTimeout(()=>preloaderEl.remove(),450); }
 
-    // return handles
+    // small onboarding: reveal karaoke area after intro finishes
+    setTimeout(()=>{ // gentle reveal
+      karaokeWrap.style.opacity = 1; karaokeWrap.style.transition = 'opacity 900ms ease';
+    }, 900);
+
     return { music, interactions, voice, visualizerHandle };
+  }
+
+  /* ---------- CHOOSE-YOUR-ADVENTURE VIGNETTE ---------- */
+  function showAdventureModal(app){
+    const overlay = elt('div',{class:'gameOverlay'});
+    const modal = elt('div',{class:'gameBoard'});
+    overlay.appendChild(modal);
+    const title = elt('h3',{}, 'Choose our little imaginary trip'); modal.appendChild(title);
+    const choices = elt('div',{style:{display:'flex',gap:'10px',flexWrap:'wrap',marginTop:'6px'}});
+    const c1 = elt('button',{class:'btn'}, 'Midnight Picnic');
+    const c2 = elt('button',{class:'btn'}, 'Playlist Marathon');
+    const c3 = elt('button',{class:'btn'}, 'Stargazing Call');
+    choices.appendChild(c1); choices.appendChild(c2); choices.appendChild(c3); modal.appendChild(choices);
+
+    const vignette = elt('div',{style:{flex:1,marginTop:'10px',borderRadius:'10px',overflow:'hidden',position:'relative',background:'#fff'}});
+    modal.appendChild(vignette);
+
+    const close = elt('button',{class:'btn secondary'}, 'Close'); modal.appendChild(close);
+    app.appendChild(overlay);
+
+    function showVignette(kind){ vignette.innerHTML = ''; if(kind==='Midnight Picnic'){
+        vignette.appendChild(elt('div',{style:{padding:'18px'}}, 'We spread a tiny blanket in pixel-lands, send each other snacks and make ridiculous toasts to our future. A soft string of messages becomes our constellation.'));
+        const party = createPartyCanvas(); party.spawn(window.innerWidth/2, window.innerHeight/2, 40); setTimeout(()=>party.destroy(),1700);
+      } else if(kind==='Playlist Marathon'){
+        vignette.appendChild(elt('div',{style:{padding:'18px'}}, 'We take turns sending the worst songs we secretly love. Each song gets a silly caption and a promise attached — the silliest gets a dance challenge.'));
+      } else if(kind==='Stargazing Call'){
+        vignette.appendChild(elt('div',{style:{padding:'18px'}}, 'We call with cameras off, watch the same sky in different places, and point at imaginary constellations until we fall asleep.'));
+      }
+    }
+    c1.addEventListener('click', ()=> showVignette('Midnight Picnic'));
+    c2.addEventListener('click', ()=> showVignette('Playlist Marathon'));
+    c3.addEventListener('click', ()=> showVignette('Stargazing Call'));
+    close.addEventListener('click', ()=> overlay.remove());
   }
 
   /* ---------- PROPOSAL SCREEN (advanced) ---------- */
   function showProposalScreen(app, audios){
-    // trap focus & hide other overlays
     document.querySelectorAll('.overlay').forEach(el=>el.style.display='none');
-
     const overlay = elt('div',{class:'overlay proposal', style:{alignItems:'center',justifyContent:'center'}});
     const card = elt('div',{class:'card', role:'dialog','aria-modal':'true'});
-    overlay.appendChild(card);
-    app.appendChild(overlay);
+    overlay.appendChild(card); app.appendChild(overlay);
 
-    const title = elt('h2',{class:'bigTitle'}, CONFIG.proposalTitle);
-    card.appendChild(title);
-    const sub = elt('div',{class:'para'}, CONFIG.proposalSubtitle);
-    card.appendChild(sub);
+    const title = elt('h2',{class:'bigTitle'}, CONFIG.proposalTitle); card.appendChild(title);
+    const sub = elt('div',{class:'para'}, CONFIG.proposalSubtitle); card.appendChild(sub);
 
     const btnRow = elt('div',{style:{display:'flex',gap:'12px',marginTop:'8px',flexWrap:'wrap',justifyContent:'center'}});
     const yesBtn = elt('button',{class:'yesBtn',role:'button','aria-label':'Yes I will marry you'}, 'YES!');
     const noBtn = elt('button',{class:'noBtn',role:'button','aria-label':'No I will not'}, 'NO!');
     btnRow.appendChild(yesBtn); btnRow.appendChild(noBtn); card.appendChild(btnRow);
 
-    // NO button: shy movement algorithm (gradually increases tendency to move)
+    // NO shy movement
     let shyness = 0.08; function shyMove(el){ const pad=12; const maxX = window.innerWidth-el.offsetWidth-pad; const maxY = window.innerHeight-el.offsetHeight-pad; const x = Math.floor(rand(0, Math.max(0,maxX))); const y = Math.floor(rand(0, Math.max(0,maxY))); el.style.position='fixed'; el.style.left = x+'px'; el.style.top = y+'px'; }
+    function onApproach(e){ const rect = noBtn.getBoundingClientRect(); const dx = e.clientX - (rect.left + rect.width/2); const dy = e.clientY - (rect.top + rect.height/2); const dist = Math.hypot(dx,dy); if(dist < 140){ if(Math.random() < 0.9 + shyness) { shyMove(noBtn); shyness = clamp(shyness+0.06, 0, 0.95); navigator.vibrate && navigator.vibrate(15); if(audios && audios.interactions) audios.interactions.play().catch(()=>{}); } } }
+    overlay.addEventListener('pointermove', onApproach); noBtn.addEventListener('touchstart', ()=>{ shyMove(noBtn); shyness = clamp(shyness+0.06,0,0.95); });
 
-    function onApproach(e){ const rect = noBtn.getBoundingClientRect(); const dx = e.clientX - (rect.left + rect.width/2); const dy = e.clientY - (rect.top + rect.height/2); const dist = Math.hypot(dx,dy); if(dist < 140){ if(Math.random() < 0.9 + shyness) { shyMove(noBtn); shyness = clamp(shyness+0.06, 0, 0.95); navigator.vibrate && navigator.vibrate(20); if(audios && audios.interactions) audios.interactions.play().catch(()=>{}); } } }
-    overlay.addEventListener('pointermove', onApproach);
-    noBtn.addEventListener('touchstart', ()=>{ shyMove(noBtn); shyness = clamp(shyness+0.06,0,0.95); });
+    noBtn.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); const sure = confirm('This page is playful — are you sure you want to say NO? If you confirm, I will accept and respect your choice.'); if(sure){ alert('I understand. Thank you for being honest.'); window.location.reload(); } } });
 
-    // keyboard fallback
-    noBtn.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); const sure = confirm('This page is playful — are you sure you want to say NO? If you confirm, I will respect your choice.'); if(sure){ alert('I understand. Thank you for being honest.'); window.location.reload(); } } });
-
-    // Yes handler (advanced sequence)
     yesBtn.addEventListener('click', async ()=>{ if(audios && audios.interactions) { audios.interactions.currentTime = 0; audios.interactions.play().catch(()=>{}); } const cardAnim = card.animate([{transform:'scale(1)', opacity:1},{transform:'scale(0.94)', opacity:0}],{duration:420,easing:'ease-in'}); await sleep(380); showSuccessScreen(app, CONFIG.successText, audios); });
 
-    const tiny = elt('div',{class:'footerTiny'}, 'Keyboard users: use Tab to focus buttons. This page is playful — you always have a choice.'); card.appendChild(tiny);
-
-    // teaser particles
+    const tiny = elt('div',{class:'footerTiny'}, 'This is playful — you always have a choice.'); card.appendChild(tiny);
     const teaser = createPartyCanvas(); teaser.spawn(window.innerWidth/2, window.innerHeight/2, 18); setTimeout(()=>teaser.destroy(),1800);
   }
 
@@ -369,12 +400,12 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
     replayVoice.addEventListener('click', ()=>{ if(audios && audios.voice) { audios.voice.currentTime = 0; audios.voice.play().catch(()=>{}); } else alert('Voice message not available.'); });
 
     // keepsake PNG generation
-    async function generatePNG(){ const canvas = document.createElement('canvas'); const W=1200, H=800; canvas.width=W; canvas.height=H; const ctx=canvas.getContext('2d'); const g = ctx.createLinearGradient(0,0,W,H); g.addColorStop(0, CONFIG.greenHex); g.addColorStop(1, CONFIG.tealHex); ctx.fillStyle = g; ctx.fillRect(0,0,W,H); ctx.fillStyle='#023'; ctx.font='48px serif'; ctx.fillText(CONFIG.titleName, 60, 90); ctx.font='22px system-ui'; const lines = CONFIG.introText.split('\n'); let y=140; ctx.fillStyle='#033'; for(const line of lines){ ctx.fillText(line, 60, y); y+=30; } ctx.fillStyle='#022'; ctx.font='20px system-ui'; ctx.fillText('— Ned', 60, y+20); return canvas.toDataURL('image/png'); }
+    async function generatePNG(){ const canvas = document.createElement('canvas'); const W=1400, H=900; canvas.width=W; canvas.height=H; const ctx=canvas.getContext('2d'); const g = ctx.createLinearGradient(0,0,W,H); g.addColorStop(0, CONFIG.greenHex); g.addColorStop(1, CONFIG.tealHex); ctx.fillStyle = g; ctx.fillRect(0,0,W,H); ctx.fillStyle='#023'; ctx.font='56px serif'; ctx.fillText(CONFIG.titleName, 80, 120); ctx.font='28px system-ui'; const lines = CONFIG.introText.split('\n'); let y=170; ctx.fillStyle='#033'; for(const line of lines){ ctx.fillText(line, 80, y); y+=36; if(y > H-120) break; } ctx.fillStyle='#022'; ctx.font='24px system-ui'; ctx.fillText('— Ned', 80, y+20); return canvas.toDataURL('image/png'); }
     downloadPNG.addEventListener('click', async ()=>{ const url = await generatePNG(); const a = document.createElement('a'); a.href=url; a.download='keepsake.png'; document.body.appendChild(a); a.click(); a.remove(); });
 
     downloadPDF.addEventListener('click', ()=>{ const w = window.open('', '_blank'); const html = `<!doctype html><html><head><meta charset=\"utf-8\"><title>Keepsake</title></head><body><pre style=\"font-family:system-ui,Arial;white-space:pre-wrap;font-size:16px;\">${CONFIG.titleName}\n\n${CONFIG.introText}\n\n${CONFIG.proposalTitle}\n${CONFIG.proposalSubtitle}\n\n${CONFIG.successText}</pre></body></html>`; w.document.write(html); w.document.close(); w.print(); });
 
-    shareBtn.addEventListener('click', ()=>{ const text = `${CONFIG.titleName}\n\n${CONFIG.proposalTitle}\n${CONFIG.proposalSubtitle}\n\n${CONFIG.successText}`; navigator.clipboard && navigator.clipboard.writeText(text).then(()=> alert('Love message copied to clipboard!')); });
+    shareBtn.addEventListener('click', ()=>{ const textMsg = `${CONFIG.titleName}\n\n${CONFIG.proposalTitle}\n${CONFIG.proposalSubtitle}\n\n${CONFIG.successText}`; navigator.clipboard && navigator.clipboard.writeText(textMsg).then(()=> alert('Love message copied to clipboard!')); });
 
     playGame.addEventListener('click', ()=>{ showCatchHeartsGame(app); });
 
@@ -414,28 +445,57 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
     closeBtn.addEventListener('click', ()=>{ clearInterval(spawnInterval); overlay.remove(); });
   }
 
+  /* ---------- PILLOW FIGHT (tap game) ---------- */
+  function showPillowFight(app){
+    const overlay = elt('div',{class:'gameOverlay'});
+    const board = elt('div',{class:'gameBoard',role:'dialog','aria-modal':'true'});
+    overlay.appendChild(board);
+    board.appendChild(elt('h3',{}, 'Pillow Fight — Tap the flying pillows!'));
+    board.appendChild(elt('div',{class:'small'}, 'Tap pillows as they fly across the screen. Reach 20 taps to win a silly victory.'));
+    const stage = elt('div',{style:{position:'relative',flex:1,overflow:'hidden',borderRadius:'10px',background:'linear-gradient(180deg,#fff,#fff6fb)'}});
+    board.appendChild(stage);
+    const footer = elt('div',{style:{display:'flex',gap:'8px',justify-content:'flex-end',marginTop:'10px'}}); 
+    const close = elt('button',{class:'btn secondary'}, 'Quit'); footer.appendChild(close); board.appendChild(footer);
+    app.appendChild(overlay);
+
+    let score = 0; const scoreEl = elt('div',{class:'footerTiny'}, 'Score: 0'); board.insertBefore(scoreEl, stage);
+    function spawnPillow(){ const p = elt('div',{}); stage.appendChild(p); const size = rand(56,110); p.style.width = size+'px'; p.style.height = size+'px'; p.style.borderRadius = '12px'; p.style.background = `linear-gradient(180deg, #fff7f8, #fceef1)`; p.style.boxShadow='0 8px 20px rgba(0,0,0,0.08)'; const startX = rand(10, stage.clientWidth - 100); p.style.left = startX + 'px'; p.style.top = (stage.clientHeight + 60) + 'px'; const dur = rand(2800, 5200); p.animate([{transform:'translateY(0px)'},{transform:`translateY(-${stage.clientHeight + 80}px)`}], {duration: dur, easing:'linear'}); const tid = setTimeout(()=> p.remove(), dur+200); p.addEventListener('click', ()=>{ clearTimeout(tid); score++; scoreEl.textContent = 'Score: ' + score; p.remove(); if(score >= 20){ alert('You win! Pillow champion 🏆'); overlay.remove(); } }); }
+    const interval = setInterval(()=> spawnPillow(), 700);
+    close.addEventListener('click', ()=>{ clearInterval(interval); overlay.remove(); });
+  }
+
+  /* ---------- MEMORY MATCH (simple card match) ---------- */
+  function showMemoryMatch(app){
+    const overlay = elt('div',{class:'gameOverlay'});
+    const board = elt('div',{class:'gameBoard',role:'dialog','aria-modal':'true'});
+    overlay.appendChild(board);
+    board.appendChild(elt('h3',{}, 'Memory Match — find pairs')); board.appendChild(elt('div',{class:'small'}, 'Flip cards and match pairs to reveal cute compliments.'));
+    const grid = elt('div',{style:{display:'grid',gridTemplateColumns:'repeat(4, 1fr)',gap:'8px',flex:1}});
+    board.appendChild(grid);
+    const footer = elt('div',{style:{display:'flex',gap:'8px',justify-content:'flex-end',marginTop:'10px'}});
+    const close = elt('button',{class:'btn secondary'}, 'Close'); footer.appendChild(close); board.appendChild(footer);
+    app.appendChild(overlay);
+
+    const emojis = ['🌟','🌙','🎵','🍰','🌸','💌','☕','📷']; const deck = emojis.concat(emojis).sort(()=>Math.random()-0.5);
+    let first=null, second=null, matched=0;
+    deck.forEach((symbol, i)=>{ const card = elt('button', {class:'btn', style:{height:'64px'}}, ''); card.dataset.symbol = symbol; card.addEventListener('click', ()=>{ if(card.classList.contains('matched')||card===first) return; card.textContent = symbol; card.style.background='#fff'; if(!first){ first=card; } else { second=card; if(first.dataset.symbol === second.dataset.symbol){ first.classList.add('matched'); second.classList.add('matched'); matched += 2; first=null; second=null; if(matched === deck.length){ alert('All pairs found! Here is a secret compliment: You make the world softer.'); overlay.remove(); } } else { setTimeout(()=>{ first.textContent=''; second.textContent=''; first.style.background=''; second.style.background=''; first=null; second=null; }, 700); } } }); grid.appendChild(card); });
+    close.addEventListener('click', ()=> overlay.remove());
+  }
+
   /* ---------- SECRET EASTER EGG (corner taps) ---------- */
   function initSecretEasterEgg(){ const seq = ['TL','TR','BL','BR','C']; let idx=0; let lastTime=0; function posToKey(x,y){ const w=window.innerWidth, h=window.innerHeight; const mx = x < w*0.25 ? 'L' : (x > w*0.75 ? 'R' : 'M'); const my = y < h*0.25 ? 'T' : (y > h*0.75 ? 'B' : 'M'); if(mx==='M' && my==='M') return 'C'; if(mx==='L' && my==='T') return 'TL'; if(mx==='R' && my==='T') return 'TR'; if(mx==='L' && my==='B') return 'BL'; if(mx==='R' && my==='B') return 'BR'; return 'C'; }
     window.addEventListener('pointerdown', (e)=>{ const now=Date.now(); if(now - lastTime > 6000) idx=0; lastTime=now; const k = posToKey(e.clientX, e.clientY); if(k === seq[idx]){ idx++; if(idx >= seq.length){ idx=0; launchHiddenMessage(); } } else { idx=0; } }); }
   function launchHiddenMessage(){ alert('Secret unlocked! You found my hidden message ❤️\nI love you more than anything.'); }
 
   /* ---------- BACKGROUND CANDIDATE LOADER (with fallback) ---------- */
-  function preloadCandidateBackgrounds(candidates, cb){
-    const valid = []; let remaining = candidates.length; if(remaining === 0) return cb([]);
-    candidates.forEach((src)=>{ const img = new Image(); let done=false; const timer = setTimeout(()=>{ if(!done){ done=true; remaining--; if(remaining===0) cb(valid); } }, 1200); img.onload = ()=>{ if(done) return; done=true; clearTimeout(timer); valid.push(src); remaining--; if(remaining===0) cb(valid); }; img.onerror = ()=>{ if(done) return; done=true; clearTimeout(timer); remaining--; if(remaining===0) cb(valid); }; img.src = src; });
-  }
+  function preloadCandidateBackgrounds(candidates, cb){ const valid = []; let remaining = candidates.length; if(remaining === 0) return cb([]); candidates.forEach((src)=>{ const img = new Image(); let done=false; const timer = setTimeout(()=>{ if(!done){ done=true; remaining--; if(remaining===0) cb(valid); } }, 1200); img.onload = ()=>{ if(done) return; done=true; clearTimeout(timer); valid.push(src); remaining--; if(remaining===0) cb(valid); }; img.onerror = ()=>{ if(done) return; done=true; clearTimeout(timer); remaining--; if(remaining===0) cb(valid); }; img.src = src; }); }
 
   /* ---------- INIT ---------- */
   function init(){ injectStyles();
-
-    // preloader UI
-    const pre = elt('div',{class:'preloader'});
-    const inner = elt('div',{class:'inner'});
-    inner.appendChild(elt('div',{html:'<strong>Loading a special surprise...</strong>'}));
-    const bar = elt('div',{class:'bar'}); const innerBar = elt('i',{}); bar.appendChild(innerBar); inner.appendChild(bar); pre.appendChild(inner); document.body.appendChild(pre);
+    const pre = elt('div',{class:'preloader'}); const inner = elt('div',{class:'inner'}); inner.appendChild(elt('div',{html:'<strong>Loading a special surprise...</strong>'})); const bar = elt('div',{class:'bar'}); const innerBar = elt('i',{}); bar.appendChild(innerBar); inner.appendChild(bar); pre.appendChild(inner); document.body.appendChild(pre);
 
     preloadCandidateBackgrounds(CONFIG.backgroundCandidates, (valid)=>{
-      let backgrounds = valid.slice(); if(backgrounds.length === 0){ console.warn('No background images found — generating procedural fallbacks.'); backgrounds = generateFallbackBackgrounds(4); }
+      let backgrounds = valid.slice(); if(backgrounds.length === 0){ console.warn('No background images found — generating procedural fallbacks.'); backgrounds = generateFallbackBackgrounds(6); }
       const imagesToPreload = backgrounds.concat([CONFIG.confettiSprite, CONFIG.heartSprite]).filter(Boolean);
       preloadAssets(imagesToPreload, CONFIG.audios, (p)=>{ innerBar.style.width = Math.round(p*100)+'%'; }, ()=>{ setTimeout(()=>{ buildUI(backgrounds, pre); initSecretEasterEgg(); }, 180); });
     });
