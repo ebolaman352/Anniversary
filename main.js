@@ -1,45 +1,26 @@
 /*
 UPDATED: main.js (with index.html snippet)
 
-INDEX.HTML (create this file at the repo root)
 
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Anniversary</title>
-</head>
-<body>
-  <!-- Tiny loader. The entire UI and logic are built by main.js -->
-  <script src="/main.js"></script>
-</body>
-</html>
+ASSETS (place these exact paths in the repo if you have them):
+- /images/backgrounds1.png, backgrounds2.png, ... (optional)
+- /images/confetti.png (optional)
+- /images/heart.png (optional)
+- /audios/music.mp3 (optional)
+- /audios/interactions.mp3 (optional)
+- /audios/voicemessage.mp3 (optional)
 
-ASSETS (place these exact paths in the repo):
-- /images/backgrounds1.png, backgrounds2.png, ... (add as many as you want; defaults try up to 12)
-- /images/confetti.png
-- /images/heart.png
-- /audios/music.mp3
-- /audios/interactions.mp3
-- /audios/voicemessage.mp3
+IMPORTANT: This version automatically creates beautiful fallback backgrounds and graceful fallbacks for missing sprites or audio so the site still fully works even if you haven't uploaded assets yet.
 
-This upgraded main.js includes many extra features beyond the original version:
-- asset preloader with a progress UI
-- animated intro with typewriter + line-highlighting
-- richer background slideshow with CSS blur & parallax plus swipe support
-- music visualizer (canvas) reacting to playback (if browser supports WebAudio)
-- prebuilt mini-game "Catch 7 Hearts" revealing 7 short memories / compliments
-- secret easter-egg sequence (tap/click certain corners in order) to unlock a hidden video/message
-- downloadable PDF/PNG keepsake generator using canvas
-- advanced, accessible NO-button behaviour with gradual 'shy' movement and fallback
-- motion-reduction toggle and accessibility improvements
-- responsive touch optimizations & vibration feedback where available
-- many small UX polish: smooth transitions, micro-interactions, ARIA labels, focus trapping on dialogs
+This upgraded main.js includes:
+- Procedural gradient background generator when images are missing
+- Graceful fallbacks for confetti/heart sprites (drawn shapes if images missing)
+- Safe audio handling: missing audio won't break the site; play controls are hidden or disabled.
+- More robust preloader and clearer console warnings to help debugging on deployment
 
 
 /* =========================
-   main.js - upgraded single-file site
+   main.js - robust single-file site with asset fallbacks
    ========================= */
 
 (function(){
@@ -48,12 +29,7 @@ This upgraded main.js includes many extra features beyond the original version:
   /* ---------- CONFIG / CONTENT ---------- */
   const CONFIG = {
     titleName: 'Dear, Ema',
-    introText: `Dear Ema,
-
-Every moment with you paints my world in brighter colors. I love the way you laugh, the little ways you notice tiny beautiful things, and the way your hand fits perfectly in mine. I want to be with you forever — to support you, to cherish you, and to make our ordinary days feel extraordinary.
-
-Always,
-Ned`,
+    introText: `Dear Ema,\n\nEvery moment with you paints my world in brighter colors. I love the way you laugh, the little ways you notice tiny beautiful things, and the way your hand fits perfectly in mine. I want to be with you forever — to support you, to cherish you, and to make our ordinary days feel extraordinary.\n\nAlways,\nNed`,
     proposalTitle: 'Will you marry me 🥹',
     proposalSubtitle: `Do you accept Ned to be your loving husband forever — even through low battery, spotty Wi‑Fi, and every sunrise in between?`,
     successText: `You said YES! My heart is the luckiest. I promise to make you laugh, to be your teammate, and to choose you every single day. Thank you for being you. I love you more than words can say. — Ned`,
@@ -143,83 +119,97 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
     const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
   }
 
-  /* ---------- PRELOADER / ASSET LOADER ---------- */
+  /* ---------- PRELOADER / ASSET LOADER (robust) ---------- */
   function preloadAssets(images, audios, onProgress, onDone){
-    const total = images.length + Object.values(audios).length;
+    const imageList = images.slice();
+    const audioList = Object.values(audios).slice();
+    const total = Math.max(1, imageList.length + audioList.length); // avoid divide by zero
     let loaded = 0; let calledDone=false;
     function progressed(){ loaded++; if(onProgress) onProgress(loaded/total); if(loaded >= total && !calledDone){ calledDone=true; onDone(); } }
 
+    if(imageList.length === 0 && audioList.length === 0){ if(onProgress) onProgress(1); onDone(); return; }
+
     // preload images
-    images.forEach(src=>{
-      const img = new Image(); img.onload = progressed; img.onerror = progressed; img.src = src;
+    imageList.forEach(src=>{
+      const img = new Image(); img.onload = progressed; img.onerror = ()=>{ console.warn('Image failed to load:', src); progressed(); }; img.src = src;
     });
     // preload audios (metadata)
-    Object.values(audios).forEach(src=>{
+    audioList.forEach(src=>{
       const a = document.createElement('audio'); a.preload='metadata';
-      a.addEventListener('loadeddata', progressed, {once:true});
-      a.addEventListener('error', progressed, {once:true});
+      const done = ()=>{ progressed(); a.remove(); };
+      a.addEventListener('loadeddata', done, {once:true});
+      a.addEventListener('error', ()=>{ console.warn('Audio failed to load:', src); done(); }, {once:true});
       a.src = src;
     });
 
     // safety timeout
-    setTimeout(()=>{ if(!calledDone) { calledDone=true; onDone(); } }, CONFIG.preloaderTimeout);
+    setTimeout(()=>{ if(!calledDone){ calledDone=true; onDone(); } }, CONFIG.preloaderTimeout);
   }
+
+  /* ---------- BACKGROUND GENERATOR (fallback if no images) ---------- */
+  function makeGradientDataURL(w=1200,h=800, colors=['#b8f1d6','#7bdff6']){
+    const c = document.createElement('canvas'); c.width = w; c.height = h; const ctx = c.getContext('2d');
+    const g = ctx.createLinearGradient(0,0,w,h); const step = 1/(colors.length-1);
+    colors.forEach((col,i)=> g.addColorStop(i*step, col)); ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+    // subtle overlay pattern
+    ctx.globalAlpha = 0.06; ctx.fillStyle = '#ffffff'; for(let i=0;i<200;i++){ ctx.beginPath(); ctx.arc(Math.random()*w, Math.random()*h, Math.random()*2.5, 0, Math.PI*2); ctx.fill(); }
+    return c.toDataURL('image/png');
+  }
+  function generateFallbackBackgrounds(n=4){ const arr=[]; for(let i=0;i<n;i++){ const c1 = interpolateColor('#b8f1d6', '#ffffff', i/(n-1)); const c2 = interpolateColor('#7bdff6', '#e6fff9', i/(n-1)); arr.push(makeGradientDataURL(1200,800, [c1,c2])); } return arr; }
+  function hexToRgb(hex){ hex = hex.replace('#',''); const bigint = parseInt(hex,16); return [(bigint>>16)&255, (bigint>>8)&255, bigint&255]; }
+  function interpolateColor(a,b,t){ const A=hexToRgb(a), B=hexToRgb(b); const R = Math.round(A[0] + (B[0]-A[0])*t); const G = Math.round(A[1] + (B[1]-A[1])*t); const Bc = Math.round(A[2] + (B[2]-A[2])*t); return `rgb(${R},${G},${Bc})`; }
 
   /* ---------- TYPER (with highlight lines) ---------- */
   function typeWithHighlight(node, text, speed=CONFIG.typingSpeed){
     node.textContent = '';
-    const lines = text.split('
-');
-    let li = 0; let ci = 0;
-    let skip=false;
+    const lines = text.split('\n');
+    let li = 0; let ci = 0; let skip=false;
     const lineNodes = lines.map(()=> elt('div', {style:{marginBottom:'6px'}}));
     lineNodes.forEach(n=>node.appendChild(n));
-
-    function step(){
-      if(skip){ lineNodes.forEach((n,i)=> n.textContent = lines[i]); return; }
-      if(li >= lines.length) return;
-      const L = lines[li];
-      lineNodes[li].textContent = L.slice(0, ci+1);
-      ci++;
-      if(ci >= L.length){ li++; ci=0; // small pause on line end
-        setTimeout(step, speed * 6);
-      } else setTimeout(step, speed);
-    }
-    step();
-    return { skip(){ skip=true; } };
+    function step(){ if(skip){ lineNodes.forEach((n,i)=> n.textContent = lines[i]); return; } if(li >= lines.length) return; const L = lines[li]; lineNodes[li].textContent = L.slice(0, ci+1); ci++; if(ci >= L.length){ li++; ci=0; setTimeout(step, speed * 6); } else setTimeout(step, speed); }
+    step(); return { skip(){ skip=true; } };
   }
 
-  /* ---------- PARTY PARTICLES (confetti + hearts) ---------- */
+  /* ---------- PARTY PARTICLES (confetti + hearts) with sprite fallback ---------- */
   function createPartyCanvas(){
     const c = document.createElement('canvas'); c.className='partyCanvas'; document.body.appendChild(c);
     const ctx = c.getContext('2d'); let W=0,H=0; function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight;} resize(); window.addEventListener('resize',resize);
     const particles = []; const sprites = {};
-    function loadSprite(url, name){ const img = new Image(); img.src = url; img.onload = ()=>sprites[name]=img; }
-    loadSprite(CONFIG.confettiSprite,'confetti'); loadSprite(CONFIG.heartSprite,'heart');
+    let confettiLoaded=false, heartLoaded=false;
+
+    function loadSprite(url, name, onok){ const img=new Image(); img.onload=()=>{ sprites[name]=img; if(name==='confetti') confettiLoaded=true; if(name==='heart') heartLoaded=true; if(onok) onok(true); }; img.onerror=()=>{ console.warn('Sprite not found:', url); if(onok) onok(false); }; img.src=url; }
+    loadSprite(CONFIG.confettiSprite,'confetti', ()=>{}); loadSprite(CONFIG.heartSprite,'heart', ()=>{});
 
     function spawn(x,y,n=30){ for(let i=0;i<n;i++){ particles.push({ x,y, vx:rand(-6,6), vy:rand(-14,-3), size:rand(14,44), life:rand(80,220), age:0, rot:rand(0,6.28), vrot:rand(-0.12,0.12), sprite: Math.random()>0.5 ? 'heart' : 'confetti' }); } }
 
-    let raf; function frame(){ ctx.clearRect(0,0,W,H); for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.age++; if(p.age>p.life){ particles.splice(i,1); continue; } p.vy += 0.4; p.x += p.vx; p.y += p.vy; p.rot += p.vrot; ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); const img=sprites[p.sprite]; if(img) ctx.drawImage(img, -p.size/2, -p.size/2, p.size, p.size); else { ctx.fillStyle='rgba(255,0,100,0.8)'; ctx.beginPath(); ctx.arc(0,0,p.size/4,0,6.28); ctx.fill(); } ctx.restore(); } raf=requestAnimationFrame(frame); }
+    let raf; function frame(){ ctx.clearRect(0,0,W,H); for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.age++; if(p.age>p.life){ particles.splice(i,1); continue; } p.vy += 0.4; p.x += p.vx; p.y += p.vy; p.rot += p.vrot; ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); const img=sprites[p.sprite]; if(img) ctx.drawImage(img, -p.size/2, -p.size/2, p.size, p.size); else { // fallback drawing
+            if(p.sprite === 'heart'){ drawHeart(ctx, 0, 0, p.size/2); } else { // confetti square
+              ctx.fillStyle = `rgba(${Math.floor(rand(60,240))},${Math.floor(rand(60,240))},${Math.floor(rand(60,240))},${0.9 - p.age/p.life})`; ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+            }
+          } ctx.restore(); } raf=requestAnimationFrame(frame); }
     frame();
     return { spawn, destroy(){ cancelAnimationFrame(raf); c.remove(); } };
   }
+  function drawHeart(ctx, x, y, size){ ctx.save(); ctx.translate(x,y); ctx.beginPath(); const topCurveHeight = size * 0.3; ctx.moveTo(0, topCurveHeight); ctx.bezierCurveTo(0, topCurveHeight - (size * 0.5), -size, topCurveHeight - (size * 0.5), -size, topCurveHeight); ctx.bezierCurveTo(-size, topCurveHeight + (size * 0.5), 0, topCurveHeight + (size * 0.9), 0, size); ctx.bezierCurveTo(0, topCurveHeight + (size * 0.9), size, topCurveHeight + (size * 0.5), size, topCurveHeight); ctx.bezierCurveTo(size, topCurveHeight - (size * 0.5), 0, topCurveHeight - (size * 0.5), 0, topCurveHeight); ctx.closePath(); ctx.fillStyle = 'rgba(255,80,120,0.95)'; ctx.fill(); ctx.restore(); }
 
   /* ---------- MUSIC VISUALIZER (WebAudio API) ---------- */
   async function setupVisualizer(audioEl, container){
     if(!window.AudioContext && !window.webkitAudioContext) return null;
-    const AudioCtx = window.AudioContext || window.webkitAudioContext; const ctx = new AudioCtx();
-    const srcNode = ctx.createMediaElementSource(audioEl);
-    const analyser = ctx.createAnalyser(); analyser.fftSize = 256; srcNode.connect(analyser); analyser.connect(ctx.destination);
-    const bufferLength = analyser.frequencyBinCount; const dataArray = new Uint8Array(bufferLength);
-
-    const canvas = elt('canvas',{class:'visualizer'}); container.appendChild(canvas); const cvs = canvas; const cctx=cvs.getContext('2d'); function resize(){cvs.width = canvas.clientWidth*devicePixelRatio; cvs.height = canvas.clientHeight*devicePixelRatio; cctx.scale(devicePixelRatio,devicePixelRatio);} resize(); window.addEventListener('resize',resize);
-    let running=true; function loop(){ if(!running) return; analyser.getByteFrequencyData(dataArray); cctx.clearRect(0,0,canvas.width,canvas.height); const w = canvas.clientWidth; const h = canvas.clientHeight; const barWidth = w / bufferLength * 1.5; for(let i=0;i<bufferLength;i++){ const v = dataArray[i]/255; const x = i*barWidth; const barH = v*h*1.2; cctx.fillStyle = `rgba(123,223,246, ${0.6 + v*0.4})`; cctx.fillRect(x, h-barH, barWidth*0.9, barH); } requestAnimationFrame(loop); }
-    loop(); return { destroy(){ running=false; canvas.remove(); ctx.close(); } };
+    try{
+      const AudioCtx = window.AudioContext || window.webkitAudioContext; const ctx = new AudioCtx();
+      const srcNode = ctx.createMediaElementSource(audioEl);
+      const analyser = ctx.createAnalyser(); analyser.fftSize = 256; srcNode.connect(analyser); analyser.connect(ctx.destination);
+      const bufferLength = analyser.frequencyBinCount; const dataArray = new Uint8Array(bufferLength);
+      const canvas = elt('canvas',{class:'visualizer'}); container.appendChild(canvas); const cvs = canvas; const cctx=cvs.getContext('2d'); function resize(){cvs.width = canvas.clientWidth*devicePixelRatio; cvs.height = canvas.clientHeight*devicePixelRatio; cctx.scale(devicePixelRatio,devicePixelRatio);} resize(); window.addEventListener('resize',resize);
+      let running=true; function loop(){ if(!running) return; analyser.getByteFrequencyData(dataArray); cctx.clearRect(0,0,canvas.width,canvas.height); const w = canvas.clientWidth; const h = canvas.clientHeight; const barWidth = w / bufferLength * 1.5; for(let i=0;i<bufferLength;i++){ const v = dataArray[i]/255; const x = i*barWidth; const barH = v*h*1.2; cctx.fillStyle = `rgba(123,223,246, ${0.6 + v*0.4})`; cctx.fillRect(x, h-barH, barWidth*0.9, barH); } requestAnimationFrame(loop); }
+      loop(); return { destroy(){ running=false; canvas.remove(); ctx.close(); } };
+    }catch(e){ console.warn('Visualizer init failed', e); return null; }
   }
 
-  /* ---------- BUILD MAIN UI ---------- */
+  /* ---------- BUILD MAIN UI (robust) ---------- */
   function buildUI(backgrounds, preloaderEl){
     // root app
+    const existingApp = document.getElementById('app'); if(existingApp) existingApp.remove();
     const app = elt('div',{id:'app'}); document.body.appendChild(app);
 
     // backgrounds
@@ -265,26 +255,28 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
     const extraTiny = elt('div',{class:'footerTiny'}, 'Mobile-friendly: tap to control audio and swipe backgrounds.'); bottom.appendChild(extraTiny);
     card.appendChild(bottom);
 
-    // audio elements
-    const music = new Audio(CONFIG.audios.music); music.loop=true; music.preload='none';
-    const interactions = new Audio(CONFIG.audios.interactions); interactions.preload='none';
-    const voice = new Audio(CONFIG.audios.voice); voice.preload='none';
+    // audio elements - create but don't assume they will play
+    let music=null, interactions=null, voice=null;
+    try{ music = new Audio(CONFIG.audios.music); music.loop=true; music.preload='none'; }catch(e){ console.warn('Music audio creation failed', e); music=null; }
+    try{ interactions = new Audio(CONFIG.audios.interactions); interactions.preload='none'; }catch(e){ interactions=null; }
+    try{ voice = new Audio(CONFIG.audios.voice); voice.preload='none'; }catch(e){ voice=null; }
+
+    // hide audio controls if audio not available
+    if(!voice){ audioVoiceBtn.style.display='none'; }
+    if(!music){ musicBtn.disabled = true; musicBtn.textContent = 'Music unavailable'; }
 
     // visualizer (try to connect when user plays music)
-    let visualizerHandle = null; async function tryInitVisualizer(){ if(visualizerHandle) return; visualizerHandle = await setupVisualizer(music, visualizerContainer); }
+    let visualizerHandle = null; async function tryInitVisualizer(){ if(visualizerHandle || !music) return; visualizerHandle = await setupVisualizer(music, visualizerContainer); }
 
     // music controls
     let musicPlaying=false;
     musicBtn.addEventListener('click', async ()=>{
-      try{ await music.play(); musicPlaying=true; musicBtn.textContent='Pause music'; tryInitVisualizer(); }catch(e){ console.warn('music play blocked',e); }
-      if(!musicPlaying){ music.pause(); musicPlaying=false; musicBtn.textContent='Play music'; }
+      if(!music) return;
+      try{ if(!musicPlaying){ await music.play(); musicPlaying=true; musicBtn.textContent='Pause music'; tryInitVisualizer(); } else { music.pause(); musicPlaying=false; musicBtn.textContent='Play music'; } }catch(e){ console.warn('Music play failed', e); }
     });
 
     // voice control
-    let voicePlaying=false; audioVoiceBtn.addEventListener('click', ()=>{
-      if(!voicePlaying){ voice.play().catch(()=>{}); audioVoiceBtn.textContent='⏸'; voicePlaying=true; } else { voice.pause(); audioVoiceBtn.textContent='▶'; voicePlaying=false; }
-    });
-    voice.addEventListener('ended', ()=>{ audioVoiceBtn.textContent='▶'; voicePlaying=false; });
+    let voicePlaying=false; if(voice){ audioVoiceBtn.addEventListener('click', ()=>{ if(!voicePlaying){ voice.play().catch(()=>{}); audioVoiceBtn.textContent='⏸'; voicePlaying=true; } else { voice.pause(); audioVoiceBtn.textContent='▶'; voicePlaying=false; } }); voice.addEventListener('ended', ()=>{ audioVoiceBtn.textContent='▶'; voicePlaying=false; }); }
 
     // typing
     const typer = typeWithHighlight(para, CONFIG.introText, CONFIG.typingSpeed);
@@ -295,7 +287,7 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
     showBg(0);
     let bgTimer = setInterval(()=>{ currentBg=(currentBg+1)%bgEls.length; showBg(currentBg); }, CONFIG.slideshowInterval);
 
-    // swipe support
+    // swipe support for touch
     let touchStartX=null; overlay.addEventListener('touchstart', e=>{ touchStartX = e.touches[0].clientX; });
     overlay.addEventListener('touchend', e=>{ if(touchStartX===null) return; const dx = (e.changedTouches[0].clientX - touchStartX); if(Math.abs(dx) > 60){ clearInterval(bgTimer); if(dx<0) currentBg=(currentBg+1)%bgEls.length; else currentBg=(currentBg-1+bgEls.length)%bgEls.length; showBg(currentBg); bgTimer = setInterval(()=>{ currentBg=(currentBg+1)%bgEls.length; showBg(currentBg); }, CONFIG.slideshowInterval); } touchStartX=null; });
 
@@ -304,7 +296,7 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
     window.addEventListener('pointermove', e=>{ if(reduceMotion) return; const sx=(e.clientX/window.innerWidth-0.5)*6; const sy=(e.clientY/window.innerHeight-0.5)*6; bgEls.forEach((el,idx)=>{ el.style.transform = `translate(${sx*(idx+1)/10}px, ${sy*(idx+1)/10}px) scale(1.02)`; }); });
 
     // continue -> proposal
-    continueBtn.addEventListener('click', ()=>{ interactions.play().catch(()=>{}); showProposalScreen(app, {music, interactions, voice}); });
+    continueBtn.addEventListener('click', ()=>{ if(interactions) interactions.play().catch(()=>{}); showProposalScreen(app, {music, interactions, voice}); });
 
     // progress removal of preloader
     if(preloaderEl) { preloaderEl.classList.add('hidden'); setTimeout(()=>preloaderEl.remove(),450); }
@@ -334,40 +326,25 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
     btnRow.appendChild(yesBtn); btnRow.appendChild(noBtn); card.appendChild(btnRow);
 
     // NO button: shy movement algorithm (gradually increases tendency to move)
-    let shyness = 0.08; // starting small
-    function shyMove(el){ const pad=12; const maxX = window.innerWidth-el.offsetWidth-pad; const maxY = window.innerHeight-el.offsetHeight-pad; const x = Math.floor(rand(0, Math.max(0,maxX))); const y = Math.floor(rand(0, Math.max(0,maxY))); el.style.position='fixed'; el.style.left = x+'px'; el.style.top = y+'px'; }
+    let shyness = 0.08; function shyMove(el){ const pad=12; const maxX = window.innerWidth-el.offsetWidth-pad; const maxY = window.innerHeight-el.offsetHeight-pad; const x = Math.floor(rand(0, Math.max(0,maxX))); const y = Math.floor(rand(0, Math.max(0,maxY))); el.style.position='fixed'; el.style.left = x+'px'; el.style.top = y+'px'; }
 
-    function onApproach(e){ // pointermove
-      const rect = noBtn.getBoundingClientRect(); const dx = e.clientX - (rect.left + rect.width/2); const dy = e.clientY - (rect.top + rect.height/2); const dist = Math.hypot(dx,dy);
-      if(dist < 140){ if(Math.random() < 0.9 + shyness) { shyMove(noBtn); shyness = clamp(shyness+0.06, 0, 0.95); navigator.vibrate && navigator.vibrate(20); audios.interactions.play().catch(()=>{}); } }
-    }
-    // pointer and touch
+    function onApproach(e){ const rect = noBtn.getBoundingClientRect(); const dx = e.clientX - (rect.left + rect.width/2); const dy = e.clientY - (rect.top + rect.height/2); const dist = Math.hypot(dx,dy); if(dist < 140){ if(Math.random() < 0.9 + shyness) { shyMove(noBtn); shyness = clamp(shyness+0.06, 0, 0.95); navigator.vibrate && navigator.vibrate(20); if(audios && audios.interactions) audios.interactions.play().catch(()=>{}); } } }
     overlay.addEventListener('pointermove', onApproach);
     noBtn.addEventListener('touchstart', ()=>{ shyMove(noBtn); shyness = clamp(shyness+0.06,0,0.95); });
 
-    // keyboard fallback: if user tabs to NO and presses Enter show confirmation modal
-    noBtn.addEventListener('keydown', (ev)=>{
-      if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); const sure = confirm('This page is playful — are you sure you want to say NO? If you confirm, I will respect your choice.'); if(sure){ // show a gentle message and return to start
-          alert('I understand. Thank you for being honest.'); window.location.reload(); } }
-    });
+    // keyboard fallback
+    noBtn.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); const sure = confirm('This page is playful — are you sure you want to say NO? If you confirm, I will respect your choice.'); if(sure){ alert('I understand. Thank you for being honest.'); window.location.reload(); } } });
 
     // Yes handler (advanced sequence)
-    yesBtn.addEventListener('click', async ()=>{
-      audios.interactions.currentTime = 0; audios.interactions.play().catch(()=>{});
-      // small transition animation
-      card.animate([{transform:'scale(1)', opacity:1},{transform:'scale(0.94)', opacity:0}],{duration:420,easing:'ease-in'});
-      await sleep(380);
-      showSuccessScreen(app, CONFIG.successText, audios);
-    });
+    yesBtn.addEventListener('click', async ()=>{ if(audios && audios.interactions) { audios.interactions.currentTime = 0; audios.interactions.play().catch(()=>{}); } const cardAnim = card.animate([{transform:'scale(1)', opacity:1},{transform:'scale(0.94)', opacity:0}],{duration:420,easing:'ease-in'}); await sleep(380); showSuccessScreen(app, CONFIG.successText, audios); });
 
-    // small hint
     const tiny = elt('div',{class:'footerTiny'}, 'Keyboard users: use Tab to focus buttons. This page is playful — you always have a choice.'); card.appendChild(tiny);
 
-    // quick particle teaser
+    // teaser particles
     const teaser = createPartyCanvas(); teaser.spawn(window.innerWidth/2, window.innerHeight/2, 18); setTimeout(()=>teaser.destroy(),1800);
   }
 
-  /* ---------- SUCCESS SCREEN (advanced), keepsake gen, mini-games ---------- */
+  /* ---------- SUCCESS SCREEN (advanced) ---------- */
   function showSuccessScreen(app, text, audios){
     document.querySelectorAll('.overlay').forEach(el=>el.remove());
     const wrap = elt('div',{class:'overlay', style:{alignItems:'center',justifyContent:'center'}});
@@ -376,7 +353,6 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
     const title = elt('h2',{class:'bigTitle'}, '💍 You said YES!'); card.appendChild(title);
     const para = elt('div',{class:'para'}, text); card.appendChild(para);
 
-    // controls: replay voice, download keepsake (PNG/PDF), play mini-game, share
     const controls = elt('div',{class:'controlsRow'});
     const replayVoice = elt('button',{class:'btn'}, 'Play voice message');
     const downloadPNG = elt('button',{class:'btn'}, 'Download keepsake (PNG)');
@@ -386,54 +362,22 @@ html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Seg
     controls.appendChild(replayVoice); controls.appendChild(downloadPNG); controls.appendChild(downloadPDF); controls.appendChild(playGame); controls.appendChild(shareBtn);
     card.appendChild(controls);
 
-    audios.interactions.currentTime = 0; audios.interactions.play().catch(()=>{});
-
-    // confetti big party
+    if(audios && audios.interactions) { audios.interactions.currentTime = 0; audios.interactions.play().catch(()=>{}); }
     const party = createPartyCanvas(); party.spawn(window.innerWidth/2, window.innerHeight/2, 120); setTimeout(()=>party.spawn(window.innerWidth/3, window.innerHeight/3, 80), 700);
 
     // replay voice
-    replayVoice.addEventListener('click', ()=>{ audios.voice.currentTime = 0; audios.voice.play().catch(()=>{}); });
+    replayVoice.addEventListener('click', ()=>{ if(audios && audios.voice) { audios.voice.currentTime = 0; audios.voice.play().catch(()=>{}); } else alert('Voice message not available.'); });
 
-    // keepsake PNG generation (render card into canvas)
-    async function generatePNG(){
-      // basic approach: render a custom canvas with the text and current background
-      const canvas = document.createElement('canvas'); const W=1200, H=800; canvas.width=W; canvas.height=H; const ctx=canvas.getContext('2d');
-      // background gradient
-      const g = ctx.createLinearGradient(0,0,W,H); g.addColorStop(0, CONFIG.greenHex); g.addColorStop(1, CONFIG.tealHex); ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
-      // title
-      ctx.fillStyle='#023'; ctx.font='48px serif'; ctx.fillText(CONFIG.titleName, 60, 90);
-      // intro text
-      ctx.font='22px system-ui'; const lines = CONFIG.introText.split('
-'); let y=140; ctx.fillStyle='#033'; for(const line of lines){ ctx.fillText(line, 60, y); y+=30; }
-      // small footer
-      ctx.fillStyle='#022'; ctx.font='20px system-ui'; ctx.fillText('— Ned', 60, y+20);
-      return canvas.toDataURL('image/png');
-    }
+    // keepsake PNG generation
+    async function generatePNG(){ const canvas = document.createElement('canvas'); const W=1200, H=800; canvas.width=W; canvas.height=H; const ctx=canvas.getContext('2d'); const g = ctx.createLinearGradient(0,0,W,H); g.addColorStop(0, CONFIG.greenHex); g.addColorStop(1, CONFIG.tealHex); ctx.fillStyle = g; ctx.fillRect(0,0,W,H); ctx.fillStyle='#023'; ctx.font='48px serif'; ctx.fillText(CONFIG.titleName, 60, 90); ctx.font='22px system-ui'; const lines = CONFIG.introText.split('\n'); let y=140; ctx.fillStyle='#033'; for(const line of lines){ ctx.fillText(line, 60, y); y+=30; } ctx.fillStyle='#022'; ctx.font='20px system-ui'; ctx.fillText('— Ned', 60, y+20); return canvas.toDataURL('image/png'); }
     downloadPNG.addEventListener('click', async ()=>{ const url = await generatePNG(); const a = document.createElement('a'); a.href=url; a.download='keepsake.png'; document.body.appendChild(a); a.click(); a.remove(); });
 
-    // PDF generation: simple single-page PDF using built-in browser print fallback (we'll make a printable page)
-    downloadPDF.addEventListener('click', ()=>{
-      const w = window.open('', '_blank'); const html = `<!doctype html><html><head><meta charset=\"utf-8\"><title>Keepsake</title></head><body><pre style=\"font-family:system-ui,Arial;white-space:pre-wrap;font-size:16px;\">${CONFIG.titleName}
+    downloadPDF.addEventListener('click', ()=>{ const w = window.open('', '_blank'); const html = `<!doctype html><html><head><meta charset=\"utf-8\"><title>Keepsake</title></head><body><pre style=\"font-family:system-ui,Arial;white-space:pre-wrap;font-size:16px;\">${CONFIG.titleName}\n\n${CONFIG.introText}\n\n${CONFIG.proposalTitle}\n${CONFIG.proposalSubtitle}\n\n${CONFIG.successText}</pre></body></html>`; w.document.write(html); w.document.close(); w.print(); });
 
-${CONFIG.introText}
+    shareBtn.addEventListener('click', ()=>{ const text = `${CONFIG.titleName}\n\n${CONFIG.proposalTitle}\n${CONFIG.proposalSubtitle}\n\n${CONFIG.successText}`; navigator.clipboard && navigator.clipboard.writeText(text).then(()=> alert('Love message copied to clipboard!')); });
 
-${CONFIG.proposalTitle}
-${CONFIG.proposalSubtitle}
-
-${CONFIG.successText}</pre></body></html>`; w.document.write(html); w.document.close(); w.print(); });
-
-    // share copy
-    shareBtn.addEventListener('click', ()=>{ const text = `${CONFIG.titleName}
-
-${CONFIG.proposalTitle}
-${CONFIG.proposalSubtitle}
-
-${CONFIG.successText}`; navigator.clipboard && navigator.clipboard.writeText(text).then(()=> alert('Love message copied to clipboard!')); });
-
-    // Mini-game: Catch hearts -> reveals memories
     playGame.addEventListener('click', ()=>{ showCatchHeartsGame(app); });
 
-    // subtle repeated particles
     const t = setInterval(()=> party.spawn(rand(100,window.innerWidth-100), rand(100,window.innerHeight-100), 40), 1600);
     window.addEventListener('beforeunload', ()=>{ clearInterval(t); party.destroy(); });
   }
@@ -464,35 +408,25 @@ ${CONFIG.successText}`; navigator.clipboard && navigator.clipboard.writeText(tex
       'When you shared your umbrella and we walked slower on purpose.'
     ];
 
-    let caught = 0; function spawnHeart(){ const h = elt('img',{class:'heartSprite',src:CONFIG.heartSprite}); stage.appendChild(h);
-      const size = rand(36,84); h.style.width = size+'px'; h.style.height = size+'px';
-      const x = rand(10, stage.clientWidth - 80); const y = stage.clientHeight + 40; h.style.left = x+'px'; h.style.top = y+'px';
-      // animate up
-      const targetY = rand(30, stage.clientHeight - 120);
-      const dur = rand(4200, 7800);
-      h.animate([{transform:`translateY(0px)`, opacity:1},{transform:`translateY(-${y - targetY}px)`, opacity:1}], {duration:dur, easing:'linear'});
-      // remove after
-      const tid = setTimeout(()=>{ h.remove(); }, dur+200);
-      h.addEventListener('click', ()=>{ clearTimeout(tid); stage.appendChild(elt('div',{})); h.remove(); const msg = memories[caught % memories.length]; alert(msg); caught++; if(caught >= CONFIG.gameHeartsCount){ alert('You caught them all! Thank you for playing ❤️'); overlay.remove(); } });
-    }
-    // spawn many hearts periodically
+    let caught = 0; function spawnHeart(){ const h = elt('div',{class:'heartSprite'}); stage.appendChild(h); const size = rand(36,84); h.style.width = size+'px'; h.style.height = size+'px'; const x = rand(10, Math.max(20, stage.clientWidth - 80)); const y = stage.clientHeight + 40; h.style.left = x+'px'; h.style.top = y+'px'; h.style.background = `radial-gradient(circle at 40% 30%, rgba(255,255,255,0.9), rgba(255,255,255,0.5)), linear-gradient(180deg, #ff9fb8, #ff5f84)`; h.style.borderRadius='50%'; h.style.boxShadow='0 6px 18px rgba(0,0,0,0.12)'; const targetY = rand(30, stage.clientHeight - 120); const dur = rand(4200, 7800); h.animate([{transform:`translateY(0px)`, opacity:1},{transform:`translateY(-${y - targetY}px)`, opacity:1}], {duration:dur, easing:'linear'}); const tid = setTimeout(()=>{ h.remove(); }, dur+200); h.addEventListener('click', ()=>{ clearTimeout(tid); const msg = memories[caught % memories.length]; caught++; h.remove(); alert(msg); if(caught >= CONFIG.gameHeartsCount){ alert('You caught them all! Thank you for playing ❤️'); overlay.remove(); } }); }
     const spawnInterval = setInterval(()=> spawnHeart(), 700);
 
     closeBtn.addEventListener('click', ()=>{ clearInterval(spawnInterval); overlay.remove(); });
   }
 
   /* ---------- SECRET EASTER EGG (corner taps) ---------- */
-  function initSecretEasterEgg(){
-    // sequence of corners to tap: TL, TR, BL, BR, center
-    const seq = ['TL','TR','BL','BR','C']; let idx=0; let lastTime=0; function posToKey(x,y){ const w=window.innerWidth, h=window.innerHeight; const mx = x < w*0.25 ? 'L' : (x > w*0.75 ? 'R' : 'M'); const my = y < h*0.25 ? 'T' : (y > h*0.75 ? 'B' : 'M'); if(mx==='M' && my==='M') return 'C'; if(mx==='L' && my==='T') return 'TL'; if(mx==='R' && my==='T') return 'TR'; if(mx==='L' && my==='B') return 'BL'; if(mx==='R' && my==='B') return 'BR'; return 'C'; }
-    window.addEventListener('pointerdown', (e)=>{ const now=Date.now(); if(now - lastTime > 6000) idx=0; lastTime=now; const k = posToKey(e.clientX, e.clientY); if(k === seq[idx]){ idx++; if(idx >= seq.length){ idx=0; launchHiddenMessage(); } } else { idx=0; } });
+  function initSecretEasterEgg(){ const seq = ['TL','TR','BL','BR','C']; let idx=0; let lastTime=0; function posToKey(x,y){ const w=window.innerWidth, h=window.innerHeight; const mx = x < w*0.25 ? 'L' : (x > w*0.75 ? 'R' : 'M'); const my = y < h*0.25 ? 'T' : (y > h*0.75 ? 'B' : 'M'); if(mx==='M' && my==='M') return 'C'; if(mx==='L' && my==='T') return 'TL'; if(mx==='R' && my==='T') return 'TR'; if(mx==='L' && my==='B') return 'BL'; if(mx==='R' && my==='B') return 'BR'; return 'C'; }
+    window.addEventListener('pointerdown', (e)=>{ const now=Date.now(); if(now - lastTime > 6000) idx=0; lastTime=now; const k = posToKey(e.clientX, e.clientY); if(k === seq[idx]){ idx++; if(idx >= seq.length){ idx=0; launchHiddenMessage(); } } else { idx=0; } }); }
+  function launchHiddenMessage(){ alert('Secret unlocked! You found my hidden message ❤️\nI love you more than anything.'); }
+
+  /* ---------- BACKGROUND CANDIDATE LOADER (with fallback) ---------- */
+  function preloadCandidateBackgrounds(candidates, cb){
+    const valid = []; let remaining = candidates.length; if(remaining === 0) return cb([]);
+    candidates.forEach((src)=>{ const img = new Image(); let done=false; const timer = setTimeout(()=>{ if(!done){ done=true; remaining--; if(remaining===0) cb(valid); } }, 1200); img.onload = ()=>{ if(done) return; done=true; clearTimeout(timer); valid.push(src); remaining--; if(remaining===0) cb(valid); }; img.onerror = ()=>{ if(done) return; done=true; clearTimeout(timer); remaining--; if(remaining===0) cb(valid); }; img.src = src; });
   }
-  function launchHiddenMessage(){ alert('Secret unlocked! You found my hidden message ❤️
-I love you more than anything.'); }
 
   /* ---------- INIT ---------- */
-  function init(){
-    injectStyles();
+  function init(){ injectStyles();
 
     // preloader UI
     const pre = elt('div',{class:'preloader'});
@@ -500,22 +434,11 @@ I love you more than anything.'); }
     inner.appendChild(elt('div',{html:'<strong>Loading a special surprise...</strong>'}));
     const bar = elt('div',{class:'bar'}); const innerBar = elt('i',{}); bar.appendChild(innerBar); inner.appendChild(bar); pre.appendChild(inner); document.body.appendChild(pre);
 
-    // pick valid backgrounds (only those that load)
     preloadCandidateBackgrounds(CONFIG.backgroundCandidates, (valid)=>{
-      const backgrounds = valid.length ? valid : ['/images/backgrounds1.png'];
-      // now preload assets (images + audio metadata)
-      const imagesToPreload = backgrounds.concat([CONFIG.confettiSprite, CONFIG.heartSprite]);
-      preloadAssets(imagesToPreload, CONFIG.audios, (p)=>{ innerBar.style.width = Math.round(p*100)+'%'; }, ()=>{
-        // remove preloader after a moment
-        setTimeout(()=>{ buildUI(backgrounds, pre); initSecretEasterEgg(); }, 180);
-      });
+      let backgrounds = valid.slice(); if(backgrounds.length === 0){ console.warn('No background images found — generating procedural fallbacks.'); backgrounds = generateFallbackBackgrounds(4); }
+      const imagesToPreload = backgrounds.concat([CONFIG.confettiSprite, CONFIG.heartSprite]).filter(Boolean);
+      preloadAssets(imagesToPreload, CONFIG.audios, (p)=>{ innerBar.style.width = Math.round(p*100)+'%'; }, ()=>{ setTimeout(()=>{ buildUI(backgrounds, pre); initSecretEasterEgg(); }, 180); });
     });
-  }
-
-  // improved background candidate loader - tries each but returns only those that load quickly
-  function preloadCandidateBackgrounds(candidates, cb){
-    const valid = []; let remaining = candidates.length; if(remaining === 0) return cb([]);
-    candidates.forEach((src)=>{ const img = new Image(); let done=false; const timer = setTimeout(()=>{ if(!done){ done=true; remaining--; if(remaining===0) cb(valid); } }, 1200); img.onload = ()=>{ if(done) return; done=true; clearTimeout(timer); valid.push(src); remaining--; if(remaining===0) cb(valid); }; img.onerror = ()=>{ if(done) return; done=true; clearTimeout(timer); remaining--; if(remaining===0) cb(valid); }; img.src = src; });
   }
 
   // run
