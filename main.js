@@ -1,43 +1,42 @@
-/* main.js — Updated per user request
-  - intro uses green hearts pattern background generated via canvas
-  - drawn hearts scattered across the intro paragraph
-  - skip button includes small text "heh no skipping baby read it first"
-  - continue correctly advances to proposal (background2)
-  - YES triggers ring catch; after catch, success screen includes extra prompt + mini-game buttons (Balloons of Memories, Catch Hearts, Memory Match)
-  - extra robustness: localStorage saves whether ring was caught, more logging, graceful fallbacks
-  - written as a single file to paste into main.js
+/* main.js — v2 (full)
+   Features:
+   - Intro with green hearts background and scattered SVG hearts
+   - "Choose our adventure" opens a modal with its own content and X to close
+   - Continue reliably proceeds to proposal; Skip skips typing and updates small note
+   - Proposal screen: YES triggers fast, bouncing, no-gravity ring with ring.mp3 playing; NO dodges
+   - When ring is caught: Yay.mp3 plays, background music volume restored, success screen shows "Let's play!!"
+   - Game flow: Let's play -> Balloons of Memories -> Memory Match (compliments per correct match)
+   - Audios: music.mp3 (autoplay attempted), click.mp3 on every click, ring.mp3 in ring game, Yay.mp3 on catch
+   - Designed to be saved as main.js and used with index.html that references it
 */
+
 (function(){
   'use strict';
 
   const CONFIG = {
     titleName: 'Dear, Ema',
     introText: `Dear Ema,\n\nEvery night I fall asleep smiling because somewhere on the other side of the world your laugh is still echoing in my head. You make tiny things feel enormous — a sleepy text, the way you describe a silly little thought, the stories you tell me at 2 AM that turn ordinary minutes into the best part of my day. Loving you is a quiet, constant adventure: I love hearing your voice, trading ridiculous memes, building plans that start as jokes and slowly turn into promises. I want to be the one who learns your favorite songs and sings them badly just so you laugh; the one who cheers when you try something new; the one who holds your hand through cold Wi‑Fi and low battery and every sunrise in between. I promise to choose you even on the ordinary days, to celebrate your tiny wins, to give you a soft place after a rough day, and to keep finding ways to surprise you — with dumb jokes, midnight playlists, and promises written in pixels. You are my favorite conversation, my safest chaos, my warm light when everything else turns grey. Stay with me in this long, silly, beautiful story — I’ll keep turning the pages if you’ll keep reading them with me.\n\n— Ned`,
-    singLines: [
-      'Oh E-ma, my heart hops like a kite,',
-      'When you text me “hey” in the middle of the night.',
-      'I’ll be your playlist, your late-call tune,',
-      'Your Wi-Fi warrior — and your afternoon moon.'
-    ],
     proposalTitle: 'Will you marry me 🥹',
     proposalSubtitle: `Do you accept Ned — as your partner in every midnight chat, your teammate when plans go sideways, your cheerleader when you try something brave, and your stubborn, silly, loving husband through slow days, fast days, low batteries and spotty connections?`,
     successText: `I can't believe you said yes — my luck and my joy and my every future just got a thousand times brighter. I promise to keep being ridiculous with you, to learn how to be better, to listen when you need space and to celebrate when you're shining. We'll build a life made from the little things: playlists we both hate-and-love, secret nicknames, small traditions that only we understand, and a million tiny moments that add up to forever. I choose you now and I'll choose you tomorrow, every time. Thank you for trusting my heart. I love you more than any message can hold.\n\n— Ned`,
     background1: '/images/backgrounds1.png',
     background2: '/images/backgrounds2.png',
-    confettiSprite: '/images/confetti.png',
-    heartSprite: '/images/heart.png',
+    siteImage: '/images/Site.png',
     audios: {
       music: '/audios/music.mp3',
       interactions: '/audios/interactions.mp3',
-      voice: '/audios/voicemessage.mp3'
+      voice: '/audios/voicemessage.mp3',
+      click: '/audios/click.mp3',
+      ring: '/audios/ring.mp3',
+      yay: '/audios/Yay.mp3'
     },
-    typingSpeed: 22,
+    typingSpeed: 20,
     preloaderTimeout: 7000,
     START_DATE: '2025-07-19'
   };
 
-  /* ---------- Utilities ---------- */
-  function elt(tag, attrs = {}, ...children){
+  /* Small helpers */
+  function elt(tag, attrs={}, ...children){
     const el = document.createElement(tag);
     for(const k in attrs){
       if(k === 'style') Object.assign(el.style, attrs.style);
@@ -49,481 +48,289 @@
     for(const c of children) if(c) el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
     return el;
   }
-  function rand(min, max){ return Math.random() * (max - min) + min; }
-  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
-  function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
-  function daysTogetherText(startDate){ const start = new Date(startDate + 'T00:00:00'); const now = new Date(); const diff = now - start; const days = Math.floor(diff / (1000*60*60*24)); const hours = Math.floor(diff / (1000*60*60)); return `${days} days (${hours} hours) of silly, cozy, loud, quiet time together`; }
-  function log(...args){ try{ console.log('[Anniv]', ...args); }catch(e){} }
+  function rand(min,max){ return Math.random()*(max-min)+min; }
+  function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+  function daysTogether(){ const s=new Date(CONFIG.START_DATE+'T00:00:00'); const now=new Date(); const days=Math.floor((now-s)/(1000*60*60*24)); const hrs=Math.floor((now-s)/(1000*60*60)); return `${days} days (${hrs} hours)`; }
 
-  /* ---------- Styles ---------- */
+  /* Styles */
   function injectStyles(){
     const css = `
-:root{ --green:#b8f1d6; --teal:#7bdff6; --accent:#67c9b7; }
-*{box-sizing:border-box}
-html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial;color:#062126;background:#f4fffb}
-#app{min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;padding:24px}
-.preloader{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#eafff4,#e6faff);z-index:1000}
-.preloader .inner{background:rgba(255,255,255,0.95);padding:18px 22px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,0.08);text-align:center}
-.backgrounds{position:absolute;inset:0;z-index:0;overflow:hidden}
-.bgimg{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity 1.2s ease, transform 1.2s ease}
-.bgimg.visible{opacity:1}
-.bg-filter{position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.28));pointer-events:none}
-.overlay{position:relative;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%}
-.card{max-width:920px;width:100%;background:rgba(255,255,255,0.92);backdrop-filter:blur(6px);border-radius:16px;padding:22px 26px;box-shadow:0 6px 30px rgba(4,23,31,0.06);transition:transform .4s ease}
-.title{font-size:28px;margin:0 0 12px 0;font-weight:800}
-.para{white-space:pre-wrap;line-height:1.55;font-size:17px;margin-bottom:14px;color:#042b29;position:relative;padding:18px;border-radius:12px;overflow:hidden}
-.para .scattered-heart{position:absolute;width:22px;height:22px;opacity:0.85;pointer-events:none;transform:translate(-50%,-50%) scale(.9);filter:drop-shadow(0 4px 8px rgba(0,0,0,0.06));}
-.controlsRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.btn{padding:10px 14px;border-radius:12px;border:none;background:var(--teal);color:#022;cursor:pointer;font-weight:700;box-shadow:0 8px 20px rgba(0,0,0,0.06)}
-.btn.secondary{background:#fff;border:2px solid rgba(0,0,0,0.06)}
-.bottomArea{display:flex;flex-direction:column;align-items:center;margin-top:8px}
-.footerTiny{font-size:13px;color:#556;margin-top:8px}
-.proposal{display:flex;flex-direction:column;align-items:center;gap:12px}
-.bigTitle{font-size:34px;margin:0}
-.partyCanvas{position:absolute;inset:0;pointer-events:none;z-index:20}
-.ring{position:fixed;width:86px;height:86px;border-radius:50%;border:8px solid gold;box-shadow:0 6px 20px rgba(0,0,0,0.18);display:grid;place-items:center;z-index:120;pointer-events:auto;background:radial-gradient(circle at 40% 35%, rgba(255,255,200,0.95), rgba(255,240,180,0.5));}
-.karaokeLine{padding:6px;border-radius:8px}
-.karaokeLine.highlight{background:linear-gradient(90deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06));}
-.smallNote{font-size:12px;color:#666;margin-left:8px}
-@media(max-width:520px){.card{padding:14px;border-radius:12px}.title{font-size:20px}.bigTitle{font-size:22px}.para{font-size:15px}}
+:root{--green:#cfeee0;--teal:#7bdff6}
+*{box-sizing:border-box}html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:#f4fffb;color:#062126}
+#app{min-height:100vh;display:flex;align-items:center;justify-content:center;position:relative;padding:20px}
+.card{max-width:920px;width:100%;background:rgba(255,255,255,0.96);border-radius:14px;padding:20px;box-shadow:0 8px 28px rgba(6,30,30,0.06)}
+.title{font-size:26px;margin:0 0 10px 0;font-weight:800}
+.para{white-space:pre-wrap;line-height:1.5;font-size:17px;padding:18px;border-radius:12px;position:relative;background:linear-gradient(180deg,var(--green),#b8f1d6);overflow:hidden;color:#023}
+.scattered-heart{position:absolute;width:20px;height:20px;pointer-events:none;opacity:0.95}
+.controls{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.btn{padding:10px 14px;border-radius:12px;border:0;background:var(--teal);color:#022;font-weight:700;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,0.06)}
+.btn.secondary{background:#fff;border:1px solid rgba(0,0,0,0.06)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,0.38);display:flex;align-items:center;justify-content:center;z-index:80}
+.modal .content{width:min(920px,94vw);max-height:86vh;overflow:auto;background:#fff;border-radius:12px;padding:18px;position:relative}
+.closeX{position:absolute;right:12px;top:8px;border:0;background:#fff;padding:8px;border-radius:8px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
+.ring{position:fixed;width:88px;height:88px;border-radius:50%;border:8px solid gold;display:grid;place-items:center;z-index:200;box-shadow:0 10px 30px rgba(0,0,0,0.18);cursor:pointer;background:radial-gradient(circle at 35% 35%, rgba(255,250,200,0.95), rgba(255,240,180,0.6))}
+.gamesRow{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+.smallNote{font-size:13px;color:#445;margin-left:8px}
 `;
     const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
   }
 
-  /* ---------- Hearts pattern generator for intro background ---------- */
-  function makeHeartsPatternDataURL(width=800, height=400, count=80){
-    const c = document.createElement('canvas'); c.width = width; c.height = height; const ctx = c.getContext('2d');
-    // base gradient
-    const g = ctx.createLinearGradient(0,0,width,height); g.addColorStop(0, '#d7f6e8'); g.addColorStop(1, '#b8f1d6'); ctx.fillStyle = g; ctx.fillRect(0,0,width,height);
-    // draw scattered tiny hearts in green tones
-    function drawHeart(x,y,s, color){
-      ctx.save(); ctx.translate(x,y); ctx.scale(s,s); ctx.beginPath();
-      ctx.moveTo(0, -6); ctx.bezierCurveTo(-6, -18, -22, -12, -22, -2); ctx.bezierCurveTo(-22, 10, -8, 20, 0, 30); ctx.bezierCurveTo(8, 20, 22, 10, 22, -2); ctx.bezierCurveTo(22, -12, 6, -18, 0, -6); ctx.closePath();
-      ctx.fillStyle = color; ctx.fill(); ctx.restore();
+  /* Audio setup */
+  const audio = { music:null, interactions:null, voice:null, click:null, ring:null, yay:null };
+  function setupAudios(){
+    try{ audio.music = new Audio(CONFIG.audios.music); audio.music.loop = true; audio.music.volume = 0.18; audio.music.preload='auto'; }catch(e){ audio.music=null; }
+    try{ audio.interactions = new Audio(CONFIG.audios.interactions); audio.interactions.preload='auto'; }catch(e){ audio.interactions=null; }
+    try{ audio.voice = new Audio(CONFIG.audios.voice); audio.voice.preload='auto'; }catch(e){ audio.voice=null; }
+    try{ audio.click = new Audio(CONFIG.audios.click); audio.click.preload='auto'; }catch(e){ audio.click=null; }
+    try{ audio.ring = new Audio(CONFIG.audios.ring); audio.ring.loop=true; audio.ring.volume=0.5; }catch(e){ audio.ring=null; }
+    try{ audio.yay = new Audio(CONFIG.audios.yay); }catch(e){ audio.yay=null; }
+
+    // try autoplay; if blocked, start on first user interaction
+    if(audio.music){
+      audio.music.play().catch(()=>{
+        const start = ()=>{ audio.music.play().catch(()=>{}); window.removeEventListener('pointerdown', start); window.removeEventListener('touchstart', start); };
+        window.addEventListener('pointerdown', start, {once:true}); window.addEventListener('touchstart', start, {once:true});
+      });
     }
-    for(let i=0;i<count;i++){
-      const x = Math.random() * width; const y = Math.random() * height; const s = 0.6 + Math.random()*0.9;
-      const t = Math.random();
-      const color = t < 0.6 ? 'rgba(34,128,92,'+(0.12+Math.random()*0.22)+')' : 'rgba(119,201,166,'+(0.08+Math.random()*0.2)+')';
-      drawHeart(x,y,s,color);
-    }
-    // subtle noise overlay
-    ctx.globalAlpha = 0.06; for(let i=0;i<3000;i++){ ctx.fillStyle = 'rgba(255,255,255,'+ (Math.random()*0.06) + ')'; ctx.fillRect(Math.random()*width, Math.random()*height, 1,1); }
+
+    // play click sound on button presses
+    document.addEventListener('click', (e)=>{
+      if(e.target.closest('button') && audio.click){ try{ audio.click.currentTime = 0; audio.click.play().catch(()=>{}); }catch(e){} }
+    }, true);
+  }
+
+  /* Hearts pattern generator for intro paragraph */
+  function makeHeartsPatternDataURL(w=900,h=320,count=120){
+    const c=document.createElement('canvas'); c.width=w; c.height=h; const ctx=c.getContext('2d');
+    const g = ctx.createLinearGradient(0,0,w,h); g.addColorStop(0,'#dff7ea'); g.addColorStop(1,'#b8f1d6'); ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+    function drawHeart(x,y,s,color){ ctx.save(); ctx.translate(x,y); ctx.scale(s,s); ctx.beginPath(); ctx.moveTo(0,-6); ctx.bezierCurveTo(-6,-18,-22,-12,-22,-2); ctx.bezierCurveTo(-22,10,-8,20,0,30); ctx.bezierCurveTo(8,20,22,10,22,-2); ctx.bezierCurveTo(22,-12,6,-18,0,-6); ctx.closePath(); ctx.fillStyle=color; ctx.fill(); ctx.restore(); }
+    for(let i=0;i<count;i++){ const x=Math.random()*w, y=Math.random()*h, s=0.5+Math.random()*1.0; const color = Math.random()<0.7 ? `rgba(34,128,92,${0.12+Math.random()*0.25})` : `rgba(119,201,166,${0.08+Math.random()*0.2})`; drawHeart(x,y,s,color); }
+    ctx.globalAlpha=0.05; for(let i=0;i<1500;i++){ ctx.fillStyle='rgba(255,255,255,'+Math.random()*0.06+')'; ctx.fillRect(Math.random()*w,Math.random()*h,1,1); }
     return c.toDataURL('image/png');
   }
 
-  /* ---------- Particles (confetti/hearts) ---------- */
-  function createPartyCanvas(){
-    const c = document.createElement('canvas'); c.className='partyCanvas'; document.body.appendChild(c);
-    const ctx = c.getContext('2d'); let W=0,H=0; function resize(){ W=c.width=window.innerWidth; H=c.height=window.innerHeight; } resize(); window.addEventListener('resize', resize);
-    const particles = [];
-    let raf;
-    function spawn(x,y,n=30){
-      for(let i=0;i<n;i++){ particles.push({
-        x,y,
-        vx:rand(-6,6),
-        vy:rand(-14,-3),
-        size:rand(6,28),
-        life:rand(80,240),
-        age:0,
-        color: `rgba(${Math.floor(rand(80,240))},${Math.floor(rand(120,255))},${Math.floor(rand(140,240))},${0.9 - Math.random()*0.6})`
-      }); }
-    }
-    function frame(){
-      ctx.clearRect(0,0,W,H);
-      for(let i=particles.length-1;i>=0;i--){
-        const p = particles[i]; p.age++; if(p.age>p.life){ particles.splice(i,1); continue; }
-        p.vy += 0.35; p.x += p.vx; p.y += p.vy; ctx.fillStyle = p.color; ctx.beginPath(); ctx.ellipse(p.x,p.y,p.size, p.size*0.7, 0,0,Math.PI*2); ctx.fill();
-      }
-      raf = requestAnimationFrame(frame);
-    }
-    frame();
-    return { spawn, destroy(){ cancelAnimationFrame(raf); c.remove(); } };
-  }
-
-  /* ---------- Visualizer (left unchanged) ---------- */
-  async function setupVisualizer(audioEl, container){ if(!window.AudioContext && !window.webkitAudioContext) return null; try{ const AudioCtx = window.AudioContext || window.webkitAudioContext; const ctx = new AudioCtx(); const srcNode = ctx.createMediaElementSource(audioEl); const analyser = ctx.createAnalyser(); analyser.fftSize = 256; srcNode.connect(analyser); analyser.connect(ctx.destination); const bufferLength = analyser.frequencyBinCount; const dataArray = new Uint8Array(bufferLength); const canvas = elt('canvas',{class:'visualizer'}); container.appendChild(canvas); const cvs = canvas; const cctx=cvs.getContext('2d'); function resize(){cvs.width = canvas.clientWidth*devicePixelRatio; cvs.height = canvas.clientHeight*devicePixelRatio; cctx.scale(devicePixelRatio,devicePixelRatio);} resize(); window.addEventListener('resize',resize); let running=true; function loop(){ if(!running) return; analyser.getByteFrequencyData(dataArray); cctx.clearRect(0,0,canvas.width,canvas.height); const w = canvas.clientWidth; const h = canvas.clientHeight; const barWidth = w / bufferLength * 1.5; for(let i=0;i<bufferLength;i++){ const v = dataArray[i]/255; const x = i*barWidth; const barH = v*h*1.2; cctx.fillStyle = `rgba(123,223,246, ${0.6 + v*0.4})`; cctx.fillRect(x, h-barH, barWidth*0.9, barH); } requestAnimationFrame(loop); } loop(); return { destroy(){ running=false; canvas.remove(); ctx.close(); } }; }catch(e){ console.warn('Visualizer init failed', e); return null; } }
-
-  /* ---------- Globals ---------- */
-  let GLOBALS = { bgEls:[], foundBgs:[], visualizer:null };
-
-  /* ---------- Core UI build ---------- */
-  function buildUI(backgrounds, preloaderEl){
-    GLOBALS.foundBgs = backgrounds.slice();
-    // cleanup old app
+  /* Build main UI */
+  function buildUI(bgs){
     const old = document.getElementById('app'); if(old) old.remove();
     const app = elt('div',{id:'app'}); document.body.appendChild(app);
 
     // backgrounds
-    const bgwrap = elt('div',{class:'backgrounds'}); app.appendChild(bgwrap);
-    const bg1 = elt('div',{class:'bgimg', style:{backgroundImage:`url(${backgrounds[0]})`}});
-    const bg2 = elt('div',{class:'bgimg', style:{backgroundImage:`url(${backgrounds[1]||backgrounds[0]})`}});
-    bgwrap.appendChild(bg1); bgwrap.appendChild(bg2); bgwrap.appendChild(elt('div',{class:'bg-filter'}));
-    GLOBALS.bgEls = [bg1,bg2];
-    bg1.classList.add('visible'); bg2.classList.remove('visible');
+    const bgwrap = elt('div',{style:{position:'absolute',inset:0,zIndex:0}});
+    const bg1 = elt('div',{style:{position:'absolute',inset:0,backgroundImage:`url(${bgs[0]})`,backgroundSize:'cover',backgroundPosition:'center',opacity:1,transition:'opacity .8s'}});
+    const bg2 = elt('div',{style:{position:'absolute',inset:0,backgroundImage:`url(${bgs[1]||bgs[0]})`,backgroundSize:'cover',backgroundPosition:'center',opacity:0,transition:'opacity .8s'}});
+    bgwrap.appendChild(bg1); bgwrap.appendChild(bg2); document.body.appendChild(bgwrap);
+    GLOBALS.bg1 = bg1; GLOBALS.bg2 = bg2;
 
-    // overlay and card (intro uses green hearts background)
-    const overlay = elt('div',{class:'overlay'});
-    const card = elt('div',{class:'card', role:'region','aria-live':'polite'});
-    overlay.appendChild(card); app.appendChild(overlay);
-
+    const container = elt('div',{class:'card'});
     const title = elt('h1',{class:'title'}, CONFIG.titleName);
-    card.appendChild(title);
+    const days = elt('div',{class:'smallNote'}, daysTogether());
+    container.appendChild(title); container.appendChild(days);
 
-    const daysCounter = elt('div',{class:'footerTiny'}, daysTogetherText(CONFIG.START_DATE));
-    card.appendChild(daysCounter);
-
-    // intro paragraph area with hearts background
+    // paragraph with hearts background
     const para = elt('div',{class:'para', id:'introPara'});
-    // apply generated hearts background to the para element
-    const heartsPattern = makeHeartsPatternDataURL(900,300,120);
-    para.style.backgroundImage = `url(${heartsPattern})`;
-    para.style.backgroundSize = 'cover';
-    para.style.backgroundRepeat = 'no-repeat';
-    para.style.color = '#043532';
-    para.textContent = ''; // will be typed
-    card.appendChild(para);
+    para.style.backgroundImage = `url(${makeHeartsPatternDataURL(900,320,120)})`;
+    para.textContent = ''; container.appendChild(para);
 
-    // scattered hearts overlay inside the para
-    function scatterHearts(n=14){
-      // remove previous
-      Array.from(para.querySelectorAll('.scattered-heart')).forEach(e=>e.remove());
-      for(let i=0;i<n;i++){
-        const h = elt('div',{class:'scattered-heart'});
-        // small SVG heart inline so no external image needed
-        h.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 21s-7-4.5-9.5-8C-1 7 5 2 8 5c1.5 1.6 2.4 2.4 4 3.1 1.6-.7 2.5-1.5 4-3.1 3-3 9 2 5.5 8-2.5 3.5-9.5 8-9.5 8z" fill="rgba(255,255,255,0.9)"/></svg>`;
-        const x = Math.random() * 92 + '%'; const y = Math.random() * 86 + '%';
-        h.style.left = x; h.style.top = y; h.style.transform = `translate(-50%,-50%) rotate(${Math.floor(rand(-40,40))}deg) scale(${0.8 + Math.random()*0.8})`;
-        para.appendChild(h);
-      }
+    // scattered SVG hearts inside para
+    for(let i=0;i<16;i++){
+      const h = elt('div',{class:'scattered-heart'});
+      const svg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 21s-7-4.5-9.5-8C-1 7 5 2 8 5c1.5 1.6 2.4 2.4 4 3.1 1.6-.7 2.5-1.5 4-3.1 3-3 9 2 5.5 8-2.5 3.5-9.5 8-9.5 8z" fill="rgba(255,255,255,0.95)"/></svg>`;
+      h.innerHTML = svg; h.style.left = (5 + Math.random()*90) + '%'; h.style.top = (5 + Math.random()*85) + '%'; h.style.transform = `translate(-50%,-50%) rotate(${Math.floor(rand(-40,40))}deg) scale(${0.8 + Math.random()*0.8})`;
+      para.appendChild(h);
     }
-    scatterHearts(18);
 
-    // controls row with skip small note
-    const controls = elt('div',{class:'controlsRow'});
-    const musicBtn = elt('button',{class:'btn', id:'musicBtn'}, 'Play music');
-    const skipWrap = elt('div',{style:{display:'flex',alignItems:'center'}});
+    // controls
+    const controls = elt('div',{class:'controls'});
+    const musicNote = elt('div',{class:'smallNote'}, 'Music will play automatically');
+    const musicBtn = elt('button',{class:'btn secondary', id:'musicBtn'}, 'Music control');
     const skipBtn = elt('button',{class:'btn secondary', id:'skipBtn'}, 'Skip');
     const skipNote = elt('div',{class:'smallNote'}, 'heh no skipping baby — read it first');
-    skipWrap.appendChild(skipBtn); skipWrap.appendChild(skipNote);
-    const adventureBtn = elt('button',{class:'btn secondary'}, 'Choose our adventure');
-    controls.appendChild(musicBtn); controls.appendChild(skipWrap); controls.appendChild(adventureBtn);
-    card.appendChild(controls);
-
-    // karaoke area placeholder
-    const karaoke = elt('div',{});
-    card.appendChild(karaoke);
-
-    const audioControls = elt('div',{class:'controlsRow'});
-    const voiceBtn = elt('button',{class:'btn'}, 'Play voice message');
-    audioControls.appendChild(voiceBtn); card.appendChild(audioControls);
+    const adventureBtn = elt('button',{class:'btn', id:'adventureBtn'}, 'Choose our adventure');
+    controls.appendChild(musicBtn); controls.appendChild(skipBtn); controls.appendChild(skipNote); controls.appendChild(adventureBtn); controls.appendChild(musicNote);
+    container.appendChild(controls);
 
     // bottom continue
-    const bottom = elt('div',{class:'bottomArea'});
-    const qTitle = elt('div',{class:'footerTiny'}, 'Did my pretty baby finish reading?');
-    const continueBtn = elt('button',{class:'btn', id:'continueBtn'}, 'Continue');
-    bottom.appendChild(qTitle); bottom.appendChild(continueBtn);
-    card.appendChild(bottom);
+    const bottom = elt('div',{style:{marginTop:'12px',display:'flex',gap:'8px',alignItems:'center'}});
+    const q = elt('div',{class:'smallNote'}, 'Did my pretty baby finish reading?');
+    const contBtn = elt('button',{class:'btn', id:'continueBtn'}, 'Continue');
+    bottom.appendChild(q); bottom.appendChild(contBtn); container.appendChild(bottom);
 
-    // audio elements
-    let music=null, interactions=null, voice=null;
-    try{ music = new Audio(CONFIG.audios.music); music.loop=true; }catch(e){ music=null; musicBtn.disabled=true; musicBtn.textContent='Music missing'; }
-    try{ interactions = new Audio(CONFIG.audios.interactions); }catch(e){ interactions=null; }
-    try{ voice = new Audio(CONFIG.audios.voice); }catch(e){ voice=null; voiceBtn.style.display='none'; }
+    app.appendChild(container);
 
-    // visualizer on music play
-    let visualizer=null;
-    musicBtn.addEventListener('click', async ()=>{
-      if(!music) return;
-      try{ if(music.paused){ await music.play(); musicBtn.textContent='Pause music'; visualizer = await setupVisualizer(music, karaoke); } else { music.pause(); musicBtn.textContent='Play music'; if(visualizer && visualizer.destroy) visualizer.destroy(); visualizer=null; } }catch(e){ console.warn(e); }
-    });
-    if(voice) voiceBtn.addEventListener('click', ()=>{ if(voice.paused) voice.play(); else voice.pause(); });
-
-    // typer for intro
+    // typing intro
     const typer = typeWithHighlight(para, CONFIG.introText, CONFIG.typingSpeed);
-    skipBtn.addEventListener('click', ()=>{ // skip triggers typer skip but keeps note visible
-      try{ typer.skip(); skipNote.textContent = 'ok you skipped — but please read ❤️'; }catch(e){ console.warn(e); }
+
+    // skip
+    skipBtn.addEventListener('click', ()=>{ try{ typer.skip(); skipNote.textContent = "ok you peeked — but please enjoy ❤️"; }catch(e){ console.warn(e); } });
+
+    // continue -> proposal
+    contBtn.addEventListener('click', ()=>{ try{ typer.skip(); if(audio.interactions){ audio.interactions.currentTime=0; audio.interactions.play().catch(()=>{});} showProposal(); }catch(e){ console.error(e); } });
+
+    // adventure modal
+    adventureBtn.addEventListener('click', ()=> openAdventureModal());
+
+    // music control
+    musicBtn.addEventListener('click', ()=>{ if(!audio.music) return alert('Music not available'); if(audio.music.paused){ audio.music.play().catch(()=>{}); musicBtn.textContent='Music: Playing'; } else { audio.music.pause(); musicBtn.textContent='Music: Paused'; } });
+
+    return {typer};
+  }
+
+  /* Adventure modal with own section and close X */
+  function openAdventureModal(){
+    const modal = elt('div',{class:'modal'});
+    const content = elt('div',{class:'content'});
+    const closeX = elt('button',{class:'closeX'}, '✕');
+    content.appendChild(closeX); content.appendChild(elt('h3',{}, 'Our Little Adventure'));
+    content.appendChild(elt('div',{style:{marginTop:'10px'}}, 'Pick an adventure to imagine together.'));
+    const area = elt('div',{style:{display:'flex',gap:'8px',marginTop:'10px'}});
+    const opt1 = elt('button',{class:'btn'}, 'Midnight Picnic'); const opt2 = elt('button',{class:'btn'}, 'Playlist Marathon'); const opt3 = elt('button',{class:'btn'}, 'Stargazing Call');
+    area.appendChild(opt1); area.appendChild(opt2); area.appendChild(opt3); content.appendChild(area);
+    modal.appendChild(content); document.body.appendChild(modal);
+
+    closeX.addEventListener('click', ()=> modal.remove());
+    opt1.addEventListener('click', ()=> showMiniAdventure('Midnight Picnic', modal));
+    opt2.addEventListener('click', ()=> showMiniAdventure('Playlist Marathon', modal));
+    opt3.addEventListener('click', ()=> showMiniAdventure('Stargazing Call', modal));
+  }
+
+  function showMiniAdventure(kind, parentModal){
+    const modal = elt('div',{class:'modal'});
+    const content = elt('div',{class:'content'});
+    content.appendChild(elt('button',{class:'closeX'}, '✕')); content.appendChild(elt('h3',{}, kind));
+    const text = { 'Midnight Picnic':'We pretend to have a tiny picnic at midnight, swapping snacks & silly toasts.', 'Playlist Marathon':'We send each other secret favorite songs and rate them with funny notes.', 'Stargazing Call':'Video-off call pointing at the sky and making up constellations.' };
+    content.appendChild(elt('div',{style:{marginTop:'8px'}}, text[kind]||''));
+    modal.appendChild(content); document.body.appendChild(modal);
+    content.querySelector('.closeX').addEventListener('click', ()=> modal.remove());
+    if(parentModal) parentModal.remove();
+  }
+
+  /* Proposal screen */
+  function showProposal(){
+    if(GLOBALS.bg2) GLOBALS.bg2.style.opacity = 1;
+    if(GLOBALS.bg1) GLOBALS.bg1.style.opacity = 0;
+    const overlayCard = elt('div',{class:'card', style:{position:'fixed',zIndex:90,left:'50%',top:'50%',transform:'translate(-50%,-50%)',maxWidth:'760px'}});
+    overlayCard.appendChild(elt('h2',{class:'title'}, CONFIG.proposalTitle));
+    overlayCard.appendChild(elt('div',{class:'para'}, CONFIG.proposalSubtitle));
+    const row = elt('div',{class:'controls'}); const yes = elt('button',{class:'btn'}, 'YES!'); const no = elt('button',{class:'btn secondary'}, 'NO!'); row.appendChild(yes); row.appendChild(no);
+    const close = elt('button',{class:'btn secondary', style:{position:'absolute',right:'12px',top:'8px'}}, 'Close');
+    overlayCard.appendChild(close); overlayCard.appendChild(row); document.body.appendChild(overlayCard);
+
+    // NO dodge
+    let shy = 0.12;
+    overlayCard.addEventListener('pointermove', (e)=>{
+      const rect = no.getBoundingClientRect();
+      const dx = e.clientX - (rect.left + rect.width/2); const dy = e.clientY - (rect.top + rect.height/2); const dist = Math.hypot(dx,dy);
+      if(dist < 140 && Math.random() < 0.85 + shy){ const x = Math.floor(rand(8, window.innerWidth - no.offsetWidth - 16)); const y = Math.floor(rand(80, window.innerHeight - no.offsetHeight - 16)); no.style.position='fixed'; no.style.left = x + 'px'; no.style.top = y + 'px'; shy = Math.min(0.95, shy + 0.06); if(audio.interactions){ audio.interactions.currentTime=0; audio.interactions.play().catch(()=>{}); } }
     });
+    no.addEventListener('click', ()=> { alert('I respect your choice. This is playful.'); });
 
-    // continue should reliably go to proposal
-    continueBtn.addEventListener('click', ()=>{
-      try{
-        // ensure intro typing is finished
-        if(typer && typeof typer.skip === 'function') typer.skip();
-        // play small interaction sound
-        if(interactions) { interactions.currentTime = 0; interactions.play().catch(()=>{}); }
-        // go to proposal
-        showProposalScreen(document.getElementById('app'), {music, interactions, voice});
-      }catch(err){ console.error('Continue handler error', err); }
-    });
-
-    adventureBtn.addEventListener('click', ()=> showAdventureModal(document.getElementById('app')));
-
-    if(preloaderEl){ preloaderEl.classList.add('hidden'); setTimeout(()=>preloaderEl.remove(), 360); }
-
-    // gentle reveal animation for card
-    setTimeout(()=>{ card.style.transform = 'translateY(0)'; },120);
-    return { music, interactions, voice };
+    yes.addEventListener('click', ()=>{ if(audio.interactions){ audio.interactions.currentTime=0; audio.interactions.play().catch(()=>{}); } overlayCard.remove(); startRingSequence(); });
+    close.addEventListener('click', ()=>{ overlayCard.remove(); if(GLOBALS.bg1) GLOBALS.bg1.style.opacity = 1; if(GLOBALS.bg2) GLOBALS.bg2.style.opacity = 0; });
   }
 
-  /* ---------- Adventure modal (unchanged concept) ---------- */
-  function showAdventureModal(app){
-    const overlay = elt('div',{class:'gameOverlay'});
-    const modal = elt('div',{class:'gameBoard'});
-    overlay.appendChild(modal);
-    modal.appendChild(elt('h3',{}, 'Choose our little imaginary trip'));
-    const choices = elt('div',{style:{display:'flex',gap:'10px',flexWrap:'wrap'}});
-    const c1 = elt('button',{class:'btn'}, 'Midnight Picnic');
-    const c2 = elt('button',{class:'btn'}, 'Playlist Marathon');
-    const c3 = elt('button',{class:'btn'}, 'Stargazing Call');
-    choices.appendChild(c1); choices.appendChild(c2); choices.appendChild(c3);
-    modal.appendChild(choices);
-    const vignette = elt('div',{style:{marginTop:'12px',padding:'12px',background:'#fff',borderRadius:'10px'}});
-    modal.appendChild(vignette);
-    const close = elt('button',{class:'btn secondary'}, 'Close'); modal.appendChild(close);
-    document.getElementById('app').appendChild(overlay);
-
-    c1.addEventListener('click', ()=> { vignette.textContent='We pretend we picnic at midnight in pixel-land...'; });
-    c2.addEventListener('click', ()=> { vignette.textContent='We trade awful songs and rate them 0-10...'; });
-    c3.addEventListener('click', ()=> { vignette.textContent='We call and stare at the same sky until we fall asleep.'; });
-    close.addEventListener('click', ()=> overlay.remove());
-  }
-
-  /* ---------- Proposal screen & NO/YES interactions ---------- */
-  function showProposalScreen(app, audios){
-    try{
-      // hide existing overlays if any
-      document.querySelectorAll('.overlay').forEach(el=>el.style.display='none');
-      // switch bg to background2 if available
-      if(GLOBALS.bgEls && GLOBALS.bgEls.length >= 2){
-        GLOBALS.bgEls[0].classList.remove('visible');
-        GLOBALS.bgEls[1].classList.add('visible');
-      }
-      const overlay = elt('div',{class:'overlay proposal'});
-      const card = elt('div',{class:'card'});
-      overlay.appendChild(card); document.getElementById('app').appendChild(overlay);
-
-      card.appendChild(elt('h2',{class:'bigTitle'}, CONFIG.proposalTitle));
-      card.appendChild(elt('div',{class:'para'}, CONFIG.proposalSubtitle));
-
-      const btnRow = elt('div',{class:'controlsRow'});
-      const yesBtn = elt('button',{class:'btn', style:{fontWeight:800}}, 'YES!');
-      const noBtn = elt('button',{class:'btn secondary'}, 'NO!');
-      btnRow.appendChild(yesBtn); btnRow.appendChild(noBtn); card.appendChild(btnRow);
-
-      // NO shy move
-      let shy=0.1;
-      function shyMove(el){
-        const pad=8;
-        const maxX = Math.max(8, window.innerWidth - el.offsetWidth - pad);
-        const maxY = Math.max(8, window.innerHeight - el.offsetHeight - pad);
-        const x = Math.floor(rand(8, maxX));
-        const y = Math.floor(rand(8, maxY));
-        el.style.position = 'fixed'; el.style.left = x + 'px'; el.style.top = y + 'px';
-      }
-      overlay.addEventListener('pointermove', (e)=>{
-        const rect = noBtn.getBoundingClientRect();
-        const dx = e.clientX - (rect.left + rect.width/2); const dy = e.clientY - (rect.top + rect.height/2);
-        const dist = Math.hypot(dx,dy);
-        if(dist < 130 && Math.random() < 0.85 + shy){ shyMove(noBtn); shy = Math.min(0.95, shy + 0.05); if(audios && audios.interactions) audios.interactions.play().catch(()=>{}); }
-      });
-      noBtn.addEventListener('touchstart', ()=> { shyMove(noBtn); });
-      noBtn.addEventListener('click', ()=> { alert("I respect your choice — this page is playful. ❤️"); });
-
-      // YES triggers ring catch sequence
-      yesBtn.addEventListener('click', async ()=>{
-        if(audios && audios.interactions) { audios.interactions.currentTime = 0; audios.interactions.play().catch(()=>{}); }
-        // short animation then launch ring sequence
-        card.animate([{transform:'scale(1)'},{transform:'scale(.98)'}],{duration:260,fill:'forwards'});
-        await sleep(240);
-        startRingCatchSequence(overlay, audios);
-      });
-    }catch(err){ console.error('showProposalScreen error', err); }
-  }
-
-  /* ---------- Ring catch ---------- */
-  function startRingCatchSequence(parentOverlay, audios){
-    // clear overlay
-    parentOverlay.innerHTML = '';
-    const prompt = elt('div',{class:'card', style:{textAlign:'center',maxWidth:'720px'}});
+  /* Ring: faster, no gravity, bounces with lively movement */
+  function startRingSequence(){
+    const prompt = elt('div',{class:'card', style:{position:'fixed',left:'50%',top:'12%',transform:'translateX(-50%)',zIndex:190,maxWidth:'720px',textAlign:'center'}});
     prompt.appendChild(elt('h3',{}, "mm sure if you really do wanna marry me then catch the ring!!"));
-    prompt.appendChild(elt('div',{class:'para', style:{fontSize:'15px'}}, 'Tap the golden ring as it flies and bounces — catch it to make it official!'));
-    parentOverlay.appendChild(prompt);
+    prompt.appendChild(elt('div',{class:'smallNote'}, 'Tap the golden ring as it zips across the screen — try to catch it!'));
+    document.body.appendChild(prompt);
 
-    // spawn ring
     const ring = elt('div',{class:'ring'});
+    let x = rand(80, window.innerWidth - 120), y = rand(80, window.innerHeight - 180);
+    ring.style.left = x + 'px'; ring.style.top = y + 'px';
     document.body.appendChild(ring);
-    let x = window.innerWidth/2 - 44, y = window.innerHeight/2 - 44;
-    let vx = rand(-5,5), vy = rand(-6,-3);
-    const w = 86, h = 86; let running = true;
-    const gravity = 0.32, bounce = 0.82;
-    function frame(){
+
+    let vx = rand(-12,12), vy = rand(-12,12); let running=true; const friction=0.996; const speedLimit=28;
+    if(audio.ring){ try{ audio.ring.currentTime=0; audio.ring.play().catch(()=>{}); }catch(e){} if(audio.music) audio.music.volume = 0.06; }
+
+    function loop(){
       if(!running) return;
-      vy += gravity; x += vx; y += vy;
-      if(x < 8){ x = 8; vx = -vx * bounce; }
-      if(x + w > window.innerWidth - 8){ x = window.innerWidth - w - 8; vx = -vx * bounce; }
-      if(y < 8){ y = 8; vy = -vy * bounce; }
-      if(y + h > window.innerHeight - 8){ y = window.innerHeight - h - 8; vy = -vy * bounce; vx *= 0.98; }
-      ring.style.left = x + 'px'; ring.style.top = y + 'px';
-      requestAnimationFrame(frame);
+      x += vx; y += vy;
+      if(x < 8){ x = 8; vx = Math.abs(vx); }
+      if(x + 88 > window.innerWidth - 8){ x = window.innerWidth - 96; vx = -Math.abs(vx); }
+      if(y < 8){ y = 8; vy = Math.abs(vy); }
+      if(y + 88 > window.innerHeight - 8){ y = window.innerHeight - 96; vy = -Math.abs(vy); }
+      if(Math.random() < 0.08){ vx += rand(-3,3); vy += rand(-3,3); }
+      const sp = Math.hypot(vx,vy); if(sp > speedLimit){ vx *= 0.96; vy *= 0.96; }
+      vx *= friction; vy *= friction; ring.style.left = x + 'px'; ring.style.top = y + 'px'; requestAnimationFrame(loop);
     }
-    requestAnimationFrame(frame);
+    requestAnimationFrame(loop);
 
     function caught(){
       if(!running) return; running=false;
-      ring.style.transition = 'transform 360ms ease, opacity 360ms ease';
-      ring.style.transform = 'scale(0.6) rotate(90deg)';
-      ring.style.opacity = '0';
-      setTimeout(()=> ring.remove(), 420);
-      setTimeout(()=> {
-        // after catch show success but include extra mini-game prompt text and mini-game buttons
-        showSuccessScreenWithMiniGames(document.getElementById('app'), CONFIG.successText, audios);
-      }, 420);
+      try{ if(audio.ring){ audio.ring.pause(); audio.ring.currentTime=0; } }catch(e){} if(audio.yay){ try{ audio.yay.currentTime=0; audio.yay.play().catch(()=>{}); }catch(e){} }
+      if(audio.music){ const target=0.18; const step=0.02; const t=setInterval(()=>{ audio.music.volume = Math.min(target, audio.music.volume + step); if(audio.music.volume >= target) clearInterval(t); }, 120); }
+      ring.style.transition='transform 350ms ease, opacity 320ms ease'; ring.style.transform='scale(.5) rotate(90deg)'; ring.style.opacity = '0'; setTimeout(()=> ring.remove(), 360);
+      setTimeout(()=> showSuccessThenGames(), 420);
     }
     ring.addEventListener('click', caught);
     ring.addEventListener('touchstart', (e)=>{ e.preventDefault(); caught(); });
 
-    // safety timeout
-    setTimeout(()=>{ if(running){ vx *= 0.1; vy *= 0.1; } }, 22000);
+    setTimeout(()=>{ if(running){ running=false; try{ ring.remove(); if(audio.ring){ audio.ring.pause(); audio.ring.currentTime=0; } }catch(e){} alert('Ring flew away — try again!'); } }, 28000);
   }
 
-  /* ---------- Success + mini games prompt ---------- */
-  function showSuccessScreenWithMiniGames(app, text, audios){
-    // cleanup overlays and show bg1
-    if(GLOBALS.bgEls && GLOBALS.bgEls.length){ GLOBALS.bgEls[0].classList.add('visible'); if(GLOBALS.bgEls[1]) GLOBALS.bgEls[1].classList.remove('visible'); }
-    document.querySelectorAll('.overlay').forEach(el=>el.remove());
-    const wrap = elt('div',{class:'overlay', style:{alignItems:'center',justifyContent:'center'}});
-    const card = elt('div',{class:'card'}); wrap.appendChild(card); document.getElementById('app').appendChild(wrap);
-
-    card.appendChild(elt('h2',{class:'bigTitle'}, '💍 You said YES!'));
-    card.appendChild(elt('div',{class:'para'}, text));
-    // extra playful paragraph offering mini-game
-    card.appendChild(elt('div',{class:'para', style:{fontSize:'15px'}}, "Okay okay how about this — why don't you enjoy a mini game here, yes? It's romantical and full of memories. Don't worry, it's cute."));
-
-    const gamesRow = elt('div',{class:'controlsRow'});
-    const g1 = elt('button',{class:'btn'}, 'Balloons of Memories');
-    const g2 = elt('button',{class:'btn'}, 'Catch Hearts');
-    const g3 = elt('button',{class:'btn'}, 'Memory Match');
-    gamesRow.appendChild(g1); gamesRow.appendChild(g2); gamesRow.appendChild(g3);
-    card.appendChild(gamesRow);
-
-    // wire up mini-games
-    g1.addEventListener('click', ()=> showBalloonsOfMemories(document.getElementById('app')));
-    g2.addEventListener('click', ()=> showCatchHeartsGame(document.getElementById('app')));
-    g3.addEventListener('click', ()=> showMemoryMatch(document.getElementById('app')));
-
-    // replay voice
-    const replay = elt('button',{class:'btn'}, 'Play voice message'); card.appendChild(replay);
-    replay.addEventListener('click', ()=>{ if(audios && audios.voice) audios.voice.play().catch(()=>{}); else alert('Voice not available'); });
-    // confetti
-    const party = createPartyCanvas(); party.spawn(window.innerWidth/2, window.innerHeight/2, 110);
-    setTimeout(()=> party.spawn(window.innerWidth/3, window.innerHeight/3, 70), 800);
-    // auto-save acceptance
-    try{ localStorage.setItem('anniv_accepted','true'); }catch(e){}
+  /* After success, show prompt and "Let's play!!" */
+  function showSuccessThenGames(){
+    if(GLOBALS.bg1) GLOBALS.bg1.style.opacity = 1; if(GLOBALS.bg2) GLOBALS.bg2.style.opacity = 0;
+    const wrap = elt('div',{class:'card', style:{position:'fixed',left:'50%',top:'50%',transform:'translate(-50%,-50%)',zIndex:190,maxWidth:'760px'}});
+    wrap.appendChild(elt('h2',{class:'title'}, '💍 You said YES!'));
+    wrap.appendChild(elt('div',{class:'para'}, CONFIG.successText));
+    wrap.appendChild(elt('div',{class:'para', style:{fontSize:'15px'}}, "Okay okay how about this — why don't you enjoy a mini game here? It's romantical and full of memories."));
+    const lets = elt('button',{class:'btn'}, "Let's play!!"); wrap.appendChild(lets); document.body.appendChild(wrap);
+    lets.addEventListener('click', ()=>{ wrap.remove(); startGameLevels(); });
   }
 
-  /* ---------- Balloons of Memories mini-game ---------- */
-  function showBalloonsOfMemories(app){
-    const overlay = elt('div',{class:'gameOverlay'});
-    const board = elt('div',{class:'gameBoard'});
-    overlay.appendChild(board);
-    board.appendChild(elt('h3',{}, 'Balloons of Memories'));
-    board.appendChild(elt('div',{class:'small'}, 'Pop the balloons to reveal a memory or a compliment. Pop them all to win.'));
-    const stage = elt('div',{style:{position:'relative',flex:1,overflow:'hidden',borderRadius:'10px',background:'linear-gradient(180deg,#fff,#f7fffb)'}});
-    board.appendChild(stage);
-    const close = elt('button',{class:'btn secondary'}, 'Close'); board.appendChild(close);
-    document.getElementById('app').appendChild(overlay);
-
-    const memories = [
-      'That rainy picnic where we laughed until our shoes were full of puddles.',
-      'The late-night call where you told me about your weird dream and I loved every second.',
-      'Your tiny thoughtful texts that make a whole day better.',
-      'The time you tried a new recipe for me (and we ate most of it cold)',
-      'You, being you, making ordinary feel special.'
-    ];
-    let popped=0;
-    function spawnBalloon(){
-      const b = elt('button',{class:'btn'}, '');
-      b.style.width = '68px'; b.style.height = '84px'; b.style.borderRadius = '50% 50% 50% 50% / 55% 55% 45% 45%';
-      b.style.position = 'absolute'; b.style.left = (rand(8, 86)) + '%'; b.style.bottom = '-120px'; b.style.background = `linear-gradient(180deg, rgba(255,220,240,0.9), rgba(255,180,220,0.9))`;
-      stage.appendChild(b);
-      const rise = rand(4200, 9000);
-      b.animate([{transform:'translateY(0)'},{transform:`translateY(-${stage.clientHeight + 160}px)`}], {duration: rise, easing:'linear'});
-      const tid = setTimeout(()=>{ if(b.parentNode) b.remove(); }, rise+300);
-      b.addEventListener('click', ()=>{
-        clearTimeout(tid); const msg = memories[Math.floor(rand(0, memories.length))]; popped++; b.remove(); alert(msg); if(popped >= 6){ alert('You popped them all — thank you for playing ❤️'); overlay.remove(); }
-      });
-    }
-    const interval = setInterval(spawnBalloon, 700);
-    close.addEventListener('click', ()=>{ clearInterval(interval); overlay.remove(); });
-  }
-
-  /* ---------- Catch hearts game (as before) ---------- */
-  function showCatchHeartsGame(app){
-    const overlay = elt('div',{class:'gameOverlay'});
-    const board = elt('div',{class:'gameBoard'});
-    overlay.appendChild(board);
-    board.appendChild(elt('h3',{}, 'Catch 7 Hearts')); board.appendChild(elt('div',{class:'small'}, 'Tap the floating hearts to reveal memories.'));
-    const stage = elt('div',{style:{position:'relative',flex:1,overflow:'hidden',borderRadius:'10px',background:'linear-gradient(180deg,#fff,#f7fffb)'}});
-    board.appendChild(stage);
-    const close = elt('button',{class:'btn secondary'}, 'Close'); board.appendChild(close);
-    document.getElementById('app').appendChild(overlay);
-
-    const memories = [
-      'The time we stayed up talking about nothing and everything.',
-      'Your goofy face when trying to be serious (it failed).',
-      'The small gift you once sent that made me cry.',
-      'Our first (virtual) movie night that felt oddly perfect.',
-      'How you cheer for me without asking for anything.'
-    ];
-    let caught = 0;
-    function spawnHeart(){ const h = elt('div',{class:'heartSprite'}); stage.appendChild(h); const size = rand(36,84); h.style.width = size+'px'; h.style.height = size+'px'; const x = rand(10, Math.max(20, stage.clientWidth - 80)); const y = stage.clientHeight + 40; h.style.left = x+'px'; h.style.top = y+'px'; h.style.background = `radial-gradient(circle at 40% 30%, rgba(255,255,255,0.9), rgba(255,255,255,0.5)), linear-gradient(180deg, #ff9fb8, #ff5f84)`; h.style.borderRadius='50%'; h.style.boxShadow='0 6px 18px rgba(0,0,0,0.12)'; const targetY = rand(30, stage.clientHeight - 120); const dur = rand(4200, 7800); h.animate([{transform:`translateY(0px)`, opacity:1},{transform:`translateY(-${y - targetY}px)`, opacity:1}], {duration:dur, easing:'linear'}); const tid = setTimeout(()=>{ h.remove(); }, dur+200); h.addEventListener('click', ()=>{ clearTimeout(tid); const msg = memories[caught % memories.length]; caught++; h.remove(); alert(msg); if(caught >= 7){ alert('You caught them all! Thank you for playing ❤️'); overlay.remove(); } }); }
-    const spawnInterval = setInterval(()=> spawnHeart(), 700);
-    close.addEventListener('click', ()=>{ clearInterval(spawnInterval); overlay.remove(); });
-  }
-
-  /* ---------- Memory match (unchanged) ---------- */
-  function showMemoryMatch(app){ const overlay = elt('div',{class:'gameOverlay'}); const board = elt('div',{class:'gameBoard'}); overlay.appendChild(board); board.appendChild(elt('h3',{}, 'Memory Match — find pairs')); board.appendChild(elt('div',{class:'small'}, 'Flip cards and match pairs to reveal cute compliments.')); const grid = elt('div',{style:{display:'grid',gridTemplateColumns:'repeat(4, 1fr)',gap:'8px',flex:1}}); board.appendChild(grid); const close = elt('button',{class:'btn secondary'}, 'Close'); board.appendChild(close); document.getElementById('app').appendChild(overlay); const emojis = ['🌟','🌙','🎵','🍰','🌸','💌','☕','📷']; const deck = emojis.concat(emojis).sort(()=>Math.random()-0.5); let first=null, second=null, matched=0; deck.forEach((symbol, i)=>{ const card = elt('button', {class:'btn', style:{height:'64px'}}, ''); card.dataset.symbol = symbol; card.addEventListener('click', ()=>{ if(card.classList.contains('matched')||card===first) return; card.textContent = symbol; card.style.background='#fff'; if(!first){ first=card; } else { second=card; if(first.dataset.symbol === second.dataset.symbol){ first.classList.add('matched'); second.classList.add('matched'); matched += 2; first=null; second=null; if(matched === deck.length){ alert('All pairs found! Here is a secret compliment: You make the world softer.'); overlay.remove(); } } else { setTimeout(()=>{ first.textContent=''; second.textContent=''; first.style.background=''; second.style.background=''; first=null; second=null; }, 700); } } }); grid.appendChild(card); }); close.addEventListener('click', ()=> overlay.remove()); }
-
-  /* ---------- Typing helper ---------- */
-  function typeWithHighlight(node, text, speed=24){
-    node.textContent = '';
-    const lines = text.split('\n');
-    let li = 0; let ci = 0; let skip=false;
-    const lineNodes = lines.map(()=> elt('div', {style:{marginBottom:'6px',position:'relative'}}));
-    lineNodes.forEach(n=>node.appendChild(n));
-    function step(){ if(skip){ lineNodes.forEach((n,i)=> n.textContent = lines[i]); return; } if(li >= lines.length) return; const L = lines[li]; lineNodes[li].textContent = L.slice(0, ci+1); ci++; if(ci >= L.length){ li++; ci=0; setTimeout(step, speed * 5); } else setTimeout(step, speed); }
-    step(); return { skip(){ skip=true; } };
-  }
-
-  /* ---------- Background discovery ---------- */
-  function checkIfExists(url, cb){ const img = new Image(); let done=false; const t = setTimeout(()=>{ if(!done){ done=true; cb(false); } }, 1400); img.onload = ()=>{ if(done) return; done=true; clearTimeout(t); cb(true); }; img.onerror = ()=>{ if(done) return; done=true; clearTimeout(t); cb(false); }; img.src = url; }
-
-  /* ---------- Init ---------- */
-  function init(){ injectStyles(); const pre = elt('div',{class:'preloader'}); const inner = elt('div',{class:'inner'}); inner.appendChild(elt('div',{html:'<strong>Loading a special surprise...</strong>'})); const bar = elt('div',{class:'bar'}); const innerBar = elt('i',{}); bar.appendChild(innerBar); inner.appendChild(bar); pre.appendChild(inner); document.body.appendChild(pre);
-
-    // check backgrounds explicitly
-    const candidates = [];
-    checkIfExists(CONFIG.background1, (ok1)=>{
-      if(ok1) candidates.push(CONFIG.background1);
-      checkIfExists(CONFIG.background2, (ok2)=>{
-        if(ok2) candidates.push(CONFIG.background2);
-        if(candidates.length === 0){
-          // generate two fallbacks
-          candidates.push(makeHeartsPatternDataURL(1200,600,180));
-          candidates.push(makeHeartsPatternDataURL(1200,600,140));
-        } else if(candidates.length === 1){
-          candidates.push(makeHeartsPatternDataURL(1200,600,140));
-        }
-        preload(candidates, (p)=>{ innerBar.style.width = Math.round(p*100) + '%'; }, ()=>{ setTimeout(()=>{ buildUI(candidates, pre); }, 160); });
-      });
+  /* Game progression: Balloons -> Memory Match -> finish */
+  function startGameLevels(){
+    showBalloonsOfMemories(document.getElementById('app'), ()=>{
+      const compliments = ['You light up my phone and my life.','You have the kindest laugh.','Being with you feels like home.','You are my favorite notification.','Your courage inspires me.'];
+      showMemoryMatch(document.getElementById('app'), compliments, ()=>{ alert('All levels complete — thank you for playing with me ❤️'); });
     });
   }
 
-  // simple image preloader
-  function preload(list, onProgress, onDone){ const arr = list.slice(); if(arr.length===0){ if(onProgress) onProgress(1); onDone(); return; } let loaded=0; const total=arr.length; arr.forEach(src=>{ const i=new Image(); i.onload=()=>{ loaded++; if(onProgress) onProgress(loaded/total); if(loaded>=total) onDone(); }; i.onerror=()=>{ loaded++; if(onProgress) onProgress(loaded/total); if(loaded>=total) onDone(); }; i.src=src; }); setTimeout(()=>{ if(onDone) onDone(); }, CONFIG.preloaderTimeout); }
+  /* Balloons of Memories */
+  function showBalloonsOfMemories(app, onComplete){
+    const overlay = elt('div',{class:'modal'}); const content = elt('div',{class:'content'});
+    const close = elt('button',{class:'closeX'}, '✕'); content.appendChild(close); content.appendChild(elt('h3',{}, 'Balloons of Memories'));
+    content.appendChild(elt('div',{style:{marginTop:'8px'}}, 'Pop balloons to reveal memories. Pop 6 to finish.'));
+    const stage = elt('div',{style:{height:'60vh',position:'relative',overflow:'hidden',marginTop:'12px',background:'linear-gradient(180deg,#fff,#f7fffb)',borderRadius:'10px'}});
+    content.appendChild(stage); overlay.appendChild(content); document.body.appendChild(overlay);
+    const memories = ['That rainy picnic where we danced in puddles.','The late night we laughed until we cried.','Your tiny notes that make everything better.','When you sent me that silly photo unexpectedly.','The first time we said "goodnight" and meant forever.'];
+    let popped=0;
+    function spawnBalloon(){ const b = elt('button',{class:'btn'}); b.style.width='74px'; b.style.height='94px'; b.style.borderRadius='50%'; b.style.position='absolute'; b.style.left = rand(6,86)+'%'; b.style.bottom='-120px'; b.style.background='linear-gradient(180deg, rgba(255,220,240,0.95), rgba(255,180,220,0.95))'; stage.appendChild(b); const rise = rand(4200,9000); b.animate([{transform:'translateY(0)'},{transform:`translateY(-${stage.clientHeight + 140}px)`}], {duration:rise, easing:'linear'}); const tid = setTimeout(()=>{ if(b.parentNode) b.remove(); }, rise+300); b.addEventListener('click', ()=>{ clearTimeout(tid); const m = memories[Math.floor(rand(0,memories.length))]; popped++; b.remove(); alert(m); if(popped >= 6){ overlay.remove(); onComplete && onComplete(); } }); }
+    const interval = setInterval(spawnBalloon, 700); close.addEventListener('click', ()=>{ clearInterval(interval); overlay.remove(); });
+  }
 
-  // start
+  /* Memory Match with compliments per correct pair */
+  function showMemoryMatch(app, compliments=null, onComplete){
+    const overlay = elt('div',{class:'modal'}); const content = elt('div',{class:'content'}); const close = elt('button',{class:'closeX'}, '✕');
+    content.appendChild(close); content.appendChild(elt('h3',{}, 'Memory Match — find pairs')); content.appendChild(elt('div',{style:{marginTop:'8px'}}, 'Flip cards and match pairs to reveal cute compliments.'));
+    const grid = elt('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'8px',marginTop:'12px'}}); content.appendChild(grid); overlay.appendChild(content); document.body.appendChild(overlay);
+    const emojis = ['🌟','🌙','🎵','🍰','🌸','💌','☕','📷']; const deck = emojis.concat(emojis).sort(()=>Math.random()-0.5);
+    let first=null, second=null, matched=0, compIdx=0;
+    deck.forEach(sym=>{ const card = elt('button',{class:'btn', style:{height:'74px',fontSize:'28px'}}, ''); card.dataset.sym = sym; card.addEventListener('click', ()=>{ if(card.classList.contains('matched')||card===first) return; card.textContent = sym; card.style.background = '#fff'; if(!first){ first = card; } else { second = card; if(first.dataset.sym === second.dataset.sym){ first.classList.add('matched'); second.classList.add('matched'); matched+=2; if(Array.isArray(compliments) && compliments[compIdx]){ alert(compliments[compIdx]); compIdx++; } first=null; second=null; if(matched === deck.length){ overlay.remove(); onComplete && onComplete(); } } else { setTimeout(()=>{ first.textContent=''; second.textContent=''; first.style.background=''; second.style.background=''; first=null; second=null; },700); } } }); grid.appendChild(card); });
+    close.addEventListener('click', ()=> overlay.remove());
+  }
+
+  /* Typing helper */
+  function typeWithHighlight(node, text, speed=20){
+    node.textContent=''; const lines = text.split('\n'); let li=0, ci=0, skip=false; const lineNodes = lines.map(()=> elt('div',{style:{marginBottom:'6px'}})); lineNodes.forEach(n=>node.appendChild(n));
+    function step(){ if(skip){ lineNodes.forEach((n,i)=> n.textContent = lines[i]); return; } if(li >= lines.length) return; const L = lines[li]; lineNodes[li].textContent = L.slice(0, ci+1); ci++; if(ci >= L.length){ li++; ci=0; setTimeout(step, speed*5); } else setTimeout(step, speed); } step(); return { skip(){ skip=true; } };
+  }
+
+  /* check image exists */
+  function checkExists(url, cb){ const img = new Image(); let done=false; const t=setTimeout(()=>{ if(!done){ done=true; cb(false); } }, 1400); img.onload = ()=>{ if(done) return; done=true; clearTimeout(t); cb(true); }; img.onerror = ()=>{ if(done) return; done=true; clearTimeout(t); cb(false); }; img.src = url; }
+
+  /* Init & glue */
+  const GLOBALS = {};
+  function init(){
+    injectStyles(); setupAudios();
+    const pre = elt('div',{style:{position:'fixed',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(255,255,255,0.9)',zIndex:999}});
+    pre.appendChild(elt('div',{}, 'Preparing a sweet surprise...')); document.body.appendChild(pre);
+    const cands = [];
+    checkExists(CONFIG.background1,(b1)=>{ if(b1) cands.push(CONFIG.background1); checkExists(CONFIG.background2,(b2)=>{ if(b2) cands.push(CONFIG.background2); if(cands.length===0){ cands.push(makeHeartsPatternDataURL(1200,800,180)); cands.push(makeHeartsPatternDataURL(1200,800,160)); } else if(cands.length===1){ cands.push(makeHeartsPatternDataURL(1200,800,160)); } setTimeout(()=>{ pre.remove(); buildUI(cands); }, 220); }); });
+  }
+
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 
 })();
